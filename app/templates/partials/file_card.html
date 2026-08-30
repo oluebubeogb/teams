@@ -1,0 +1,28 @@
+<article class="card rounded-xl p-4 flex flex-col gap-3 hover:shadow-md transition">
+  <div class="flex items-start gap-3">
+    <a href="/u/{{ f.author_username }}" class="avatar" title="{{ f.author_name }}">{{ f.author_initials }}</a>
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center gap-2 flex-wrap">
+        <a href="/u/{{ f.author_username }}" class="font-medium text-[15px] hover:underline truncate">{{ f.author_name }}</a>
+        <span class="text-[13px] muted">· {{ f.relative_date }}</span>
+      </div>
+      <p class="text-[13px] muted truncate mt-0.5">{{ f.original_name }}</p>
+    </div>
+    <span class="text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 muted">{{ f.file_type }}</span>
+  </div>
+  <p class="text-[15px] leading-snug">{{ f.description }}</p>
+  <div class="flex items-center gap-2 mt-auto pt-1">
+    {% if f.file_type == 'url' %}
+      <a href="{{ f.url }}" target="_blank" rel="noopener" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 muted" title="Open link">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+      </a>
+    {% else %}
+      <a href="/api/view/{{ f.id }}" target="_blank" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 muted" title="View fullscreen">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+      </a>
+      <a href="/api/download/{{ f.id }}" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 muted" title="Download">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+      </a>
+    {% endif %}
+  </div>
+</article>

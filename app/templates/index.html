@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}{% if query %}Search: {{ query }}  Teams{% else %}Teams  Discover files{% endif %}{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+  <form action="/search" method="get" class="relative max-w-xl mx-auto">
+    <input
+      type="search"
+      name="q"
+      value="{{ query or '' }}"
+      placeholder="Search files by content or name&"
+      class="w-full pl-11 pr-4 py-3 rounded-xl card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)] transition"
+      autocomplete="off"
+    />
+    <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+    </svg>
+  </form>
+</div>
+
+{% if query %}
+  <h1 class="text-[15px] font-semibold mb-4">Results for {{ query }}</h1>
+  {% if groups %}
+    {% for ftype, items in groups.items() %}
+      <section class="mb-8">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-[13px] font-semibold uppercase tracking-wider muted">{{ ftype }}</span>
+          <span class="text-[13px] muted">({{ items|length }})</span>
+        </div>
+        <div class="grid-cards">
+          {% for f in items %}
+            {% include "partials/file_card.html" %}
+          {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+  {% else %}
+    <p class="muted text-center py-12">No matching files found.</p>
+  {% endif %}
+{% else %}
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-[15px] font-semibold">Recent</h1>
+    {% if user %}
+      <button onclick="document.getElementById('upload-modal').classList.remove('hidden')" class="btn px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-[15px] font-medium">
+        + Upload
+      </button>
+    {% endif %}
+  </div>
+  {% if files %}
+    <div class="grid-cards">
+      {% for f in files %}
+        {% include "partials/file_card.html" %}
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted text-center py-16">No files yet. {% if user %}Be the first to upload!{% else %}<a href="/signup" class="accent">Sign up</a> to upload.{% endif %}</p>
+  {% endif %}
+{% endif %}
+
+{% if user %}
+<!-- Upload Modal -->
+<div id="upload-modal" class="fixed inset-0 z-50 hidden bg-black/50 flex items-center justify-center p-4">
+  <div class="card rounded-2xl w-full max-w-md p-6 shadow-xl">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="font-semibold text-[15px]">Upload</h2>
+      <button onclick="document.getElementById('upload-modal').classList.add('hidden')" class="muted hover:text-[var(--text)]"></button>
+    </div>
+    <form id="upload-form" class="space-y-4">
+      <div>
+        <label class="block text-[13px] font-medium muted mb-1">Description (max 50 chars)</label>
+        <input type="text" name="description" maxlength="50" required
+               class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+      </div>
+      <div>
+        <label class="block text-[13px] font-medium muted mb-1">File (pdf, docx, pptx, xlsx, csv)</label>
+        <input type="file" name="file" accept=".pdf,.docx,.pptx,.xlsx,.csv,.xls"
+               class="w-full text-[14px]" />
+      </div>
+      <div class="text-center muted text-[13px]"> or </div>
+      <div>
+        <label class="block text-[13px] font-medium muted mb-1">URL link</label>
+        <input type="url" name="url" placeholder="https://&"
+               class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+      </div>
+      <button type="submit" class="w-full btn py-2.5 rounded-lg bg-[var(--accent)] text-white font-medium">Upload</button>
+      <p id="upload-msg" class="text-[13px] text-center muted"></p>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const form = document.getElementById('upload-form');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('upload-msg');
+      msg.textContent = 'Uploading&';
+      const fd = new FormData(form);
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Upload failed');
+        msg.textContent = 'Done!';
+        setTimeout(() => location.reload(), 600);
+      } catch (err) {
+        msg.textContent = err.message;
+      }
+    });
+  }
+</script>
+{% endblock %}

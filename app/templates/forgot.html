@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Forgot password  Teams{% endblock %}
+
+{% block content %}
+<div class="max-w-sm mx-auto">
+  <h1 class="text-[15px] font-semibold mb-2 text-center">Reset password</h1>
+  <p class="text-[13px] muted text-center mb-6">Enter the email and phone number used at signup.</p>
+
+  <div id="step1" class="card rounded-2xl p-6 space-y-4">
+    <div>
+      <label class="block text-[13px] font-medium muted mb-1">Email</label>
+      <input type="email" id="fp-email" required class="w-full px-3 py-2.5 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+    </div>
+    <div>
+      <label class="block text-[13px] font-medium muted mb-1">Phone number</label>
+      <input type="tel" id="fp-phone" required class="w-full px-3 py-2.5 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+    </div>
+    <button id="btn-verify" class="w-full btn py-2.5 rounded-lg bg-[var(--accent)] text-white font-medium">Verify</button>
+    <p id="fp-msg" class="text-[13px] text-center muted"></p>
+  </div>
+
+  <div id="step2" class="card rounded-2xl p-6 space-y-4 hidden">
+    <div>
+      <label class="block text-[13px] font-medium muted mb-1">New password (min 6)</label>
+      <div class="relative">
+        <input type="password" id="fp-new" required minlength="6"
+               class="w-full px-3 py-2.5 pr-10 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+        <button type="button" data-eye="fp-new" class="eye-btn absolute right-2.5 top-1/2 -translate-y-1/2 p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+        </button>
+      </div>
+    </div>
+    <button id="btn-reset" class="w-full btn py-2.5 rounded-lg bg-[var(--accent)] text-white font-medium">Set new password</button>
+    <p id="fp-msg2" class="text-[13px] text-center muted"></p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let verifiedEmail = '', verifiedPhone = '';
+document.getElementById('btn-verify').addEventListener('click', async () => {
+  const msg = document.getElementById('fp-msg');
+  msg.textContent = '&';
+  verifiedEmail = document.getElementById('fp-email').value.trim();
+  verifiedPhone = document.getElementById('fp-phone').value.trim();
+  try {
+    const res = await fetch('/api/forgot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: verifiedEmail, phone: verifiedPhone })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Verification failed');
+    document.getElementById('step1').classList.add('hidden');
+    document.getElementById('step2').classList.remove('hidden');
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+});
+
+document.getElementById('btn-reset').addEventListener('click', async () => {
+  const msg = document.getElementById('fp-msg2');
+  msg.textContent = '&';
+  const newPass = document.getElementById('fp-new').value;
+  try {
+    const res = await fetch('/api/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: verifiedEmail, phone: verifiedPhone, new_password: newPass })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Reset failed');
+    window.location.href = '/dashboard';
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+});
+</script>
+{% endblock %}

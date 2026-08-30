@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ profile.full_name }}  Teams{% endblock %}
+
+{% block content %}
+<div class="card rounded-2xl p-6 mb-8 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+  <div class="avatar avatar-lg">{{ initials }}</div>
+  <div>
+    <h1 class="font-semibold text-[15px]">{{ profile.full_name }}</h1>
+    <p class="text-[13px] muted">@{{ profile.username }}</p>
+    {% if profile.bio %}
+      <p class="text-[15px] mt-2 leading-snug">{{ profile.bio }}</p>
+    {% endif %}
+  </div>
+</div>
+
+<h2 class="text-[15px] font-semibold mb-4">Files by {{ profile.full_name.split()[0] }}</h2>
+{% if files %}
+  <div class="grid-cards">
+    {% for f in files %}
+      {% include "partials/file_card.html" %}
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="muted text-center py-12">No public files yet.</p>
+{% endif %}
+{% endblock %}
