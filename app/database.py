@@ -1,14 +1,24 @@
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent / "teams.db"
+# Store DB under /app/data so Coolify can mount a single directory volume
+DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
+DB_PATH = DATA_DIR / "teams.db"
+
+
+def _ensure_data_dir():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def get_connection():
+    _ensure_data_dir()
     conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
 
 @contextmanager
 def get_db():
@@ -22,7 +32,9 @@ def get_db():
     finally:
         conn.close()
 
+
 def init_db():
+    _ensure_data_dir()
     with get_db() as conn:
         conn.executescript("""
         CREATE TABLE IF NOT EXISTS users (

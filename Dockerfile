@@ -2,9 +2,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# System deps for some Python packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
+    build-essential curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -12,16 +11,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Ensure upload dir exists and is writable
-RUN mkdir -p app/uploads && chmod -R 755 app/uploads
+# Writable dirs for SQLite + uploads (Coolify should mount volumes here)
+RUN mkdir -p /app/data app/uploads && chmod -R 777 /app/data app/uploads
 
 ENV PYTHONUNBUFFERED=1
 ENV UPLOAD_DIR=app/uploads
+ENV DATA_DIR=/app/data
 
 EXPOSE 8008
 
-# Healthcheck for Coolify / orchestrators
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/health')" || exit 1
+# Coolify prefers curl/wget for healthchecks
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://127.0.0.1:8008/health || exit 1
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8008"]

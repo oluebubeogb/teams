@@ -83,24 +83,14 @@ Optional:
 
 6. **Persistent storage** (important so DB + files survive redeploys):
 
-   In Coolify → Storage / Volumes, add:
+   In Coolify → **Storages** / **Volumes**, add **directory** mounts:
 
-   | Container path      | Purpose                          |
-   |---------------------|----------------------------------|
-   | `/app/teams.db`     | SQLite database (file mount) **or** mount a directory and set DB path |
-   | `/app/app/uploads`  | Uploaded files                   |
+   | Destination (container path) | Purpose              |
+   |------------------------------|----------------------|
+   | `/app/data`                  | SQLite DB (`teams.db`) |
+   | `/app/app/uploads`           | Uploaded files       |
 
-   Recommended simple setup:
-
-   - Volume name: `teams-data`
-   - Mount: `/app/data` (directory)
-   - Then either keep defaults (DB at `/app/teams.db` may still be ephemeral unless you also mount it)  
-     **Better:** mount two paths:
-
-   - Source volume `teams-db` → Destination `/app/teams.db` (file volume if supported)  
-   - Source volume `teams-uploads` → Destination `/app/app/uploads`
-
-   If Coolify only supports directory mounts, mount one volume to `/app/data` and you can later move DB path; for v1 the two mounts above work on most Coolify setups.
+   Use **directory** volumes only. Do **not** mount a volume onto a single file path like `/app/teams.db` — that causes `unable to open database file`.
 
 7. **Healthcheck**: Dockerfile already includes one hitting `/health`.
 

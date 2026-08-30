@@ -17,3 +17,6 @@ app/uploads/*
 dist/
 build/
 *.egg-info/
+
+/data/
+*.db
