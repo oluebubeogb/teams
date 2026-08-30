@@ -10,7 +10,7 @@ Search groups results by file type ordered by keyword relevance in content.
 - Sign up / Login / Forgot password (email + phone verification)
 - Eye toggle on all password fields
 - Day / Night theme toggle
-- Responsive grid (1 � 2 � 3 columns)
+- Responsive grid (1 → 2 → 3 columns)
 - Public profiles at `/u/username`
 - User dashboard with bio
 - Upload: PDF, DOCX, PPTX, XLSX, CSV + URL links
@@ -18,44 +18,7 @@ Search groups results by file type ordered by keyword relevance in content.
 - Content-aware search with grouped results
 - Author initials avatar, relative dates, view & download
 - Clean SVGs, consistent font size, weight hierarchy
-- Coolify / Docker ready
-
-## Quick Start (local)
-
-```bash
-# optional virtualenv
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-
-pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8008
-```
-
-Open http://localhost:8008
-
-## Deploy on Coolify
-
-1. Create a new **Resource** � **Docker Compose** (or Dockerfile).
-2. Connect your Git repository (this project).
-3. Coolify will detect `Dockerfile` / `docker-compose.yml`.
-4. Set environment variable:
-   - `SECRET_KEY` = a long random string
-5. Publish port **8008** (or let Coolify handle reverse proxy).
-6. Deploy.
-
-Persistent volumes are defined for uploads and the SQLite database.
-
-For production you can later switch the SQLite path to a mounted volume or migrate to PostgreSQL.
-
-## Git
-
-```bash
-git init
-git add .
-git commit -m "Teams v1  sleek file discovery"
-git remote add origin git@github.com:oluebubeogb/teams.git
-git push -u origin main
-```
+- **Dockerfile-only** (Coolify ready)
 
 ## Project structure
 
@@ -68,19 +31,102 @@ app/
   utils.py         # initials, relative date, text extraction, scoring
   templates/       # Jinja2 + Tailwind CDN
   static/
-  uploads/
+  uploads/         # created at runtime
 Dockerfile
-docker-compose.yml
 requirements.txt
+.env.example
 ```
+
+## Local run (optional)
+
+```bash
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env       # edit SECRET_KEY
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8008
+```
+
+Open http://localhost:8008
+
+## Deploy on Coolify (Dockerfile only)
+
+This project is **Dockerfile-only**. Do **not** use Docker Compose.
+
+### 1. Push to Git
+
+```bash
+git init
+git add .
+git commit -m "Teams v1 — Dockerfile only"
+git remote add origin <your-repo-url>
+git push -u origin main
+```
+
+### 2. Create resource in Coolify
+
+1. **New Resource** → **Dockerfile** (or **Public Repository** / Git and choose build pack **Dockerfile**).
+2. Connect your Git repository.
+3. Coolify will detect the root `Dockerfile`.
+4. **Port**: `8008` (container port). Coolify will map domain → 8008.
+5. **Environment variables** (required):
+
+| Variable     | Value                                      |
+|--------------|--------------------------------------------|
+| `SECRET_KEY` | long random string (e.g. `openssl rand -hex 32`) |
+
+Optional:
+
+| Variable     | Default        | Notes                |
+|--------------|----------------|----------------------|
+| `UPLOAD_DIR` | `app/uploads`  | leave default        |
+
+6. **Persistent storage** (important so DB + files survive redeploys):
+
+   In Coolify → Storage / Volumes, add:
+
+   | Container path      | Purpose                          |
+   |---------------------|----------------------------------|
+   | `/app/teams.db`     | SQLite database (file mount) **or** mount a directory and set DB path |
+   | `/app/app/uploads`  | Uploaded files                   |
+
+   Recommended simple setup:
+
+   - Volume name: `teams-data`
+   - Mount: `/app/data` (directory)
+   - Then either keep defaults (DB at `/app/teams.db` may still be ephemeral unless you also mount it)  
+     **Better:** mount two paths:
+
+   - Source volume `teams-db` → Destination `/app/teams.db` (file volume if supported)  
+   - Source volume `teams-uploads` → Destination `/app/app/uploads`
+
+   If Coolify only supports directory mounts, mount one volume to `/app/data` and you can later move DB path; for v1 the two mounts above work on most Coolify setups.
+
+7. **Healthcheck**: Dockerfile already includes one hitting `/health`.
+
+8. Deploy.
+
+### 3. After deploy
+
+- Open your domain.
+- Sign up a user.
+- Login → Dashboard should load (no Internal Server Error).
+- Uploads and SQLite persist if volumes are set.
+
+### Common Coolify pitfalls (fixed in this package)
+
+- Do **not** select Docker Compose build pack — there is no `docker-compose.yml`.
+- Port must be **8008** (matches `EXPOSE` and `CMD`).
+- Set `SECRET_KEY` or sessions will be insecure / inconsistent across restarts.
+- Without a volume on `/app/app/uploads` and `/app/teams.db`, data is lost on every redeploy.
+- Template encoding issues that caused **500 Internal Server Error** on `/dashboard` after login are fixed.
 
 ## Notes
 
-- Password minimum: 6 characters (any length above that).
+- Password minimum: 6 characters.
 - Avatars are generated initials (no image upload in v1).
 - URL uploads only store the link (no content scrape).
 - Search ranks by simple keyword frequency in extracted text + filename + description.
 - Empty file-type groups are hidden.
-- First group shown is the one with the highest relevance score.
 
 Built for Coolify on any VPS.

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{% if query %}Search: {{ query }}  Teams{% else %}Teams  Discover files{% endif %}{% endblock %}
+{% block title %}{% if query %}Search: {{ query }} - Teams{% else %}Teams - Discover files{% endif %}{% endblock %}
 
 {% block content %}
 <div class="mb-8">
@@ -76,7 +76,7 @@
         <input type="file" name="file" accept=".pdf,.docx,.pptx,.xlsx,.csv,.xls"
                class="w-full text-[14px]" />
       </div>
-      <div class="text-center muted text-[13px]"> or </div>
+      <div class="text-center muted text-[13px]">- or -</div>
       <div>
         <label class="block text-[13px] font-medium muted mb-1">URL link</label>
         <input type="url" name="url" placeholder="https://&"

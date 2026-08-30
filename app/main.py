@@ -202,7 +202,9 @@ async def api_signup(data: UserCreate, response: Response):
         value=token,
         httponly=True,
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax"
+        samesite="lax",
+        secure=False,  # set True if only HTTPS; Coolify proxy often terminates TLS
+        path="/"
     )
     return {"ok": True, "username": username, "token": token}
 
@@ -218,7 +220,9 @@ async def api_login(data: UserLogin, response: Response):
         value=token,
         httponly=True,
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax"
+        samesite="lax",
+        secure=False,  # set True if only HTTPS; Coolify proxy often terminates TLS
+        path="/"
     )
     return {"ok": True, "username": user["username"], "token": token}
 
@@ -240,7 +244,10 @@ async def api_reset(data: ResetPassword, response: Response):
     with get_db() as conn:
         conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (pw_hash, user["id"]))
     token = create_access_token({"sub": str(user["id"])})
-    response.set_cookie(key="access_token", value=token, httponly=True, max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60, samesite="lax")
+    response.set_cookie(
+        key="access_token", value=token, httponly=True,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60, samesite="lax", secure=False, path="/"
+    )
     return {"ok": True, "token": token}
 
 @app.post("/api/logout")

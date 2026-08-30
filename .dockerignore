@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+*.db
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.idea/
+.vscode/
+*.log
+README.md
+.dockerignore
+app/uploads/*
+!app/uploads/.gitkeep
