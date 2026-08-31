@@ -48,6 +48,23 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 MIME_MAP = {
     "pdf": "application/pdf",
     "csv": "text/csv; charset=utf-8",
+    "txt": "text/plain; charset=utf-8",
+    "html": "text/html; charset=utf-8",
+    "htm": "text/html; charset=utf-8",
+    "css": "text/css; charset=utf-8",
+    "js": "application/javascript",
+    "json": "application/json",
+    "xml": "application/xml",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "gif": "image/gif",
+    "webp": "image/webp",
+    "svg": "image/svg+xml",
+    "mp3": "audio/mpeg",
+    "wav": "audio/wav",
+    "mp4": "video/mp4",
+    "webm": "video/webm",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "xls": "application/vnd.ms-excel",
@@ -578,16 +595,20 @@ async def api_view(file_id: int):
     if not path.exists():
         raise HTTPException(404, "File missing")
 
-    media = MIME_MAP.get(row["file_type"], "application/octet-stream")
-    # Stream with inline disposition so browsers preview PDF/CSV/text; Office may still download
-    # depending on browser plugins, but Content-Disposition: inline is the correct approach.
+    # Determine MIME from the stored type, then fall back to the actual filename.
+    # This prevents unknown/missing file_type values from becoming
+    # application/octet-stream, which makes browsers download instead of preview.
+    import mimetypes
+    extension = path.suffix.lower().lstrip(".")
+    media = MIME_MAP.get(row.get("file_type")) or MIME_MAP.get(extension) or mimetypes.guess_type(row["original_name"])[0] or "application/octet-stream"
+
     return FileResponse(
         path,
         media_type=media,
         filename=row["original_name"],
         content_disposition_type="inline",
         headers={
-            "Content-Disposition": f'inline; filename="{row["original_name"]}"',
+            "Content-Disposition": f'inline; filename="{row["original_name"].replace(chr(34), "")}"',
             "X-Content-Type-Options": "nosniff",
             "Cache-Control": "private, max-age=3600",
         },
