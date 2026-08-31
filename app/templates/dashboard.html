@@ -67,9 +67,13 @@
           </a>
         {% endif %}
         <button type="button"
-          class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 muted text-[13px] font-medium"
+          class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 muted text-[13px] font-medium edit-file-btn"
           title="Edit"
-          onclick="openEditModal({{ f.id }}, {{ f.title|tojson }}, {{ f.description|tojson }}, {{ f.collaborators_csv|default('')|tojson }}, '{{ f.file_type }}')">
+          data-file-id="{{ f.id }}"
+          data-title="{{ f.title|e }}"
+          data-description="{{ f.description|default('')|e }}"
+          data-collaborators="{{ f.collaborators_csv|default('')|e }}"
+          data-file-type="{{ f.file_type|e }}">
           Edit
         </button>
         <button type="button" class="p-2 rounded-lg hover:bg-red-500/10 text-red-500 text-[13px] font-medium" title="Delete"
@@ -197,6 +201,18 @@ function openEditModal(id, title, description, collabCsv, fileType) {
   document.getElementById('edit-msg').textContent = '';
   document.getElementById('edit-modal').classList.remove('hidden');
 }
+
+document.querySelectorAll('.edit-file-btn').forEach((button) => {
+  button.addEventListener('click', () => {
+    openEditModal(
+      button.dataset.fileId,
+      button.dataset.title,
+      button.dataset.description,
+      button.dataset.collaborators,
+      button.dataset.fileType
+    );
+  });
+});
 
 document.getElementById('edit-form').addEventListener('submit', async (e) => {
   e.preventDefault();
