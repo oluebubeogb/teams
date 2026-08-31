@@ -15,12 +15,21 @@
 
 <h2 class="text-[15px] font-semibold mb-4">Files by {{ profile.full_name.split()[0] }}</h2>
 {% if files %}
-  <div class="grid-cards">
+  <div class="grid-cards mb-10">
     {% for f in files %}
       {% include "partials/file_card.html" %}
     {% endfor %}
   </div>
 {% else %}
-  <p class="muted text-center py-12">No public files yet.</p>
+  <p class="muted text-center py-8 mb-10">No public files yet.</p>
+{% endif %}
+
+{% if collab_files %}
+  <h2 class="text-[15px] font-semibold mb-4">Collaborations</h2>
+  <div class="grid-cards">
+    {% for f in collab_files %}
+      {% include "partials/file_card.html" %}
+    {% endfor %}
+  </div>
 {% endif %}
 {% endblock %}

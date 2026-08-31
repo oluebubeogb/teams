@@ -27,24 +27,80 @@
 {% if files %}
   <div class="grid-cards">
     {% for f in files %}
-      {% include "partials/file_card.html" %}
+    <article class="card rounded-xl p-4 flex flex-col gap-3 hover:shadow-md transition" data-file-id="{{ f.id }}">
+      <div class="flex items-start gap-3">
+        <a href="/u/{{ f.author_username }}" class="avatar" title="{{ f.author_name }}">{{ f.author_initials }}</a>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <a href="/u/{{ f.author_username }}" class="font-medium text-[15px] hover:underline truncate">{{ f.author_name }}</a>
+            <span class="text-[13px] muted">· {{ f.relative_date }}</span>
+          </div>
+          {% if f.collaborators %}
+          <div class="text-[12px] muted mt-0.5 flex flex-wrap gap-x-1.5 gap-y-0.5">
+            {% for c in f.collaborators %}
+              <a href="/u/{{ c.username }}" class="hover:underline hover:text-[var(--text)]">{{ c.full_name }}</a>{% if not loop.last %}<span>,</span>{% endif %}
+            {% endfor %}
+          </div>
+          {% endif %}
+          <p class="text-[13px] muted truncate mt-0.5">{{ f.original_name }}</p>
+        </div>
+        <span class="text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 muted">{{ f.file_type }}</span>
+      </div>
+      {% if f.title %}
+      <p class="text-[15px] font-medium leading-snug">{{ f.title }}</p>
+      {% endif %}
+      <p class="text-[14px] leading-snug muted">{{ f.description }}</p>
+      {% if f.owner_collaborators %}
+      <p class="text-[12px] muted">Collaborators: {% for c in f.owner_collaborators %}<span title="{{ c.email }}">{{ c.email }}{% if c.registered %} ({{ c.full_name }}){% endif %}</span>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+      {% endif %}
+      <div class="flex items-center gap-2 mt-auto pt-1 flex-wrap">
+        {% if f.file_type == 'url' %}
+          <a href="{{ f.url }}" target="_blank" rel="noopener" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 muted" title="Open link">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          </a>
+        {% else %}
+          <a href="/api/view/{{ f.id }}" target="_blank" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 muted" title="View in browser">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+          </a>
+          <a href="/api/download/{{ f.id }}" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 muted" title="Download">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          </a>
+        {% endif %}
+        <button type="button"
+          class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 muted text-[13px] font-medium"
+          title="Edit"
+          onclick="openEditModal({{ f.id }}, {{ f.title|tojson }}, {{ f.description|tojson }}, {{ f.collaborators_csv|default('')|tojson }}, '{{ f.file_type }}')">
+          Edit
+        </button>
+        <button type="button" class="p-2 rounded-lg hover:bg-red-500/10 text-red-500 text-[13px] font-medium" title="Delete"
+          onclick="deleteFile({{ f.id }})">Delete</button>
+      </div>
+    </article>
     {% endfor %}
   </div>
 {% else %}
-  <p class="muted text-center py-12">You havent uploaded anything yet.</p>
+  <p class="muted text-center py-12">You haven't uploaded anything yet.</p>
 {% endif %}
 
-<!-- Upload Modal (same as index) -->
+<!-- Upload Modal -->
 <div id="upload-modal" class="fixed inset-0 z-50 hidden bg-black/50 flex items-center justify-center p-4">
-  <div class="card rounded-2xl w-full max-w-md p-6 shadow-xl">
+  <div class="card rounded-2xl w-full max-w-md p-6 shadow-xl max-h-[90vh] overflow-y-auto">
     <div class="flex justify-between items-center mb-4">
       <h2 class="font-semibold text-[15px]">Upload</h2>
-      <button onclick="document.getElementById('upload-modal').classList.add('hidden')" class="muted"></button>
+      <button type="button" onclick="document.getElementById('upload-modal').classList.add('hidden')" class="muted hover:text-[var(--text)] text-xl leading-none" aria-label="Close">&times;</button>
     </div>
     <form id="upload-form" class="space-y-4">
       <div>
-        <label class="block text-[13px] font-medium muted mb-1">Description (max 50 chars)</label>
-        <input type="text" name="description" maxlength="50" required class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+        <label class="block text-[13px] font-medium muted mb-1">Title (max 300 chars)</label>
+        <input type="text" name="title" maxlength="300" required class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+      </div>
+      <div>
+        <label class="block text-[13px] font-medium muted mb-1">Description (max 300 chars)</label>
+        <textarea name="description" maxlength="300" required rows="3" class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"></textarea>
+      </div>
+      <div>
+        <label class="block text-[13px] font-medium muted mb-1">Collaborators (optional, comma-separated emails)</label>
+        <input type="text" name="collaborators" placeholder="alice@example.com, bob@example.com" class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
       </div>
       <div>
         <label class="block text-[13px] font-medium muted mb-1">File</label>
@@ -53,10 +109,42 @@
       <div class="text-center muted text-[13px]">- or -</div>
       <div>
         <label class="block text-[13px] font-medium muted mb-1">URL</label>
-        <input type="url" name="url" placeholder="https://&" class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+        <input type="url" name="url" placeholder="https://..." class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
       </div>
       <button type="submit" class="w-full btn py-2.5 rounded-lg bg-[var(--accent)] text-white font-medium">Upload</button>
       <p id="upload-msg" class="text-[13px] text-center muted"></p>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="edit-modal" class="fixed inset-0 z-50 hidden bg-black/50 flex items-center justify-center p-4">
+  <div class="card rounded-2xl w-full max-w-md p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="font-semibold text-[15px]">Edit upload</h2>
+      <button type="button" onclick="document.getElementById('edit-modal').classList.add('hidden')" class="muted hover:text-[var(--text)] text-xl leading-none" aria-label="Close">&times;</button>
+    </div>
+    <form id="edit-form" class="space-y-4">
+      <input type="hidden" id="edit-file-id" name="file_id" />
+      <div>
+        <label class="block text-[13px] font-medium muted mb-1">Title (max 300 chars)</label>
+        <input type="text" id="edit-title" name="title" maxlength="300" required class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+      </div>
+      <div>
+        <label class="block text-[13px] font-medium muted mb-1">Description (max 300 chars)</label>
+        <textarea id="edit-description" name="description" maxlength="300" required rows="3" class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"></textarea>
+      </div>
+      <div>
+        <label class="block text-[13px] font-medium muted mb-1">Collaborators (comma-separated emails)</label>
+        <input type="text" id="edit-collaborators" name="collaborators" placeholder="alice@example.com, bob@example.com" class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+        <p class="text-[12px] muted mt-1">All emails shown here. On the public site only registered names appear.</p>
+      </div>
+      <div id="edit-file-row">
+        <label class="block text-[13px] font-medium muted mb-1">Replace file (optional)</label>
+        <input type="file" id="edit-file" name="file" accept=".pdf,.docx,.pptx,.xlsx,.csv,.xls" class="w-full text-[14px]" />
+      </div>
+      <button type="submit" class="w-full btn py-2.5 rounded-lg bg-[var(--accent)] text-white font-medium">Save changes</button>
+      <p id="edit-msg" class="text-[13px] text-center muted"></p>
     </form>
   </div>
 </div>
@@ -79,12 +167,13 @@ async function saveBio() {
     msg.textContent = 'Error saving';
   }
 }
+
 const form = document.getElementById('upload-form');
 if (form) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const msg = document.getElementById('upload-msg');
-    msg.textContent = 'Uploading&';
+    msg.textContent = 'Uploading...';
     const fd = new FormData(form);
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
@@ -96,6 +185,52 @@ if (form) {
       msg.textContent = err.message;
     }
   });
+}
+
+function openEditModal(id, title, description, collabCsv, fileType) {
+  document.getElementById('edit-file-id').value = id;
+  document.getElementById('edit-title').value = title || '';
+  document.getElementById('edit-description').value = description || '';
+  document.getElementById('edit-collaborators').value = collabCsv || '';
+  document.getElementById('edit-file').value = '';
+  document.getElementById('edit-file-row').style.display = (fileType === 'url') ? 'none' : 'block';
+  document.getElementById('edit-msg').textContent = '';
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+
+document.getElementById('edit-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('edit-msg');
+  msg.textContent = 'Saving...';
+  const id = document.getElementById('edit-file-id').value;
+  const fd = new FormData();
+  fd.append('title', document.getElementById('edit-title').value);
+  fd.append('description', document.getElementById('edit-description').value);
+  fd.append('collaborators', document.getElementById('edit-collaborators').value);
+  const fileInput = document.getElementById('edit-file');
+  if (fileInput.files && fileInput.files[0]) {
+    fd.append('file', fileInput.files[0]);
+  }
+  try {
+    const res = await fetch('/api/file/' + id, { method: 'PUT', body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || 'Failed');
+    msg.textContent = 'Saved!';
+    setTimeout(() => location.reload(), 500);
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+});
+
+async function deleteFile(id) {
+  if (!confirm('Delete this file?')) return;
+  try {
+    const res = await fetch('/api/file/' + id, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed');
+    location.reload();
+  } catch (err) {
+    alert(err.message);
+  }
 }
 </script>
 {% endblock %}

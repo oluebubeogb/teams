@@ -42,7 +42,7 @@
 document.getElementById('signup-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = document.getElementById('signup-msg');
-  msg.textContent = '&';
+  msg.textContent = 'Loading...';
   const fd = new FormData(e.target);
   try {
     const res = await fetch('/api/signup', {

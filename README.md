@@ -14,7 +14,7 @@ Search groups results by file type ordered by keyword relevance in content.
 - Public profiles at `/u/username`
 - User dashboard with bio
 - Upload: PDF, DOCX, PPTX, XLSX, CSV + URL links
-- Description max 50 characters
+- Title + description max 300 characters each; collaborators; edit uploads
 - Content-aware search with grouped results
 - Author initials avatar, relative dates, view & download
 - Clean SVGs, consistent font size, weight hierarchy

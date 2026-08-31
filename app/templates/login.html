@@ -35,7 +35,7 @@
 document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = document.getElementById('login-msg');
-  msg.textContent = '&';
+  msg.textContent = 'Loading...';
   const fd = new FormData(e.target);
   try {
     const res = await fetch('/api/login', {

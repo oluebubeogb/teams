@@ -33,6 +33,28 @@ def get_db():
         conn.close()
 
 
+def _migrate(conn):
+    """Add new columns / tables if missing (safe for existing DBs)."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(files)").fetchall()}
+    if "title" not in cols:
+        conn.execute("ALTER TABLE files ADD COLUMN title TEXT DEFAULT ''")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS file_collaborators (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_id INTEGER NOT NULL,
+            email TEXT NOT NULL,
+            user_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+            UNIQUE(file_id, email)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_collab_file ON file_collaborators(file_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_collab_user ON file_collaborators(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_collab_email ON file_collaborators(email)")
+
+
 def init_db():
     _ensure_data_dir()
     with get_db() as conn:
@@ -56,6 +78,7 @@ def init_db():
             file_type TEXT NOT NULL,
             storage_path TEXT,
             url TEXT,
+            title TEXT DEFAULT '',
             description TEXT DEFAULT '',
             extracted_text TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -68,3 +91,4 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_files_type ON files(file_type);
         CREATE INDEX IF NOT EXISTS idx_files_created ON files(created_at DESC);
         """)
+        _migrate(conn)

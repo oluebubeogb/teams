@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
-from datetime import datetime
+
 
 class UserCreate(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=100)
@@ -19,26 +19,40 @@ class UserCreate(BaseModel):
     def phone_clean(cls, v):
         return v.strip().replace(" ", "").replace("-", "")
 
+
 class UserLogin(BaseModel):
     identifier: str  # email or phone
     password: str
 
+
 class ForgotPassword(BaseModel):
     email: str
     phone: str
+
 
 class ResetPassword(BaseModel):
     email: str
     phone: str
     new_password: str = Field(..., min_length=6)
 
+
 class ProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     bio: Optional[str] = Field(None, max_length=300)
 
+
 class FileUploadMeta(BaseModel):
-    description: str = Field(..., max_length=50)
-    url: Optional[str] = None  # for URL type
+    title: str = Field(..., max_length=300)
+    description: str = Field(..., max_length=300)
+    url: Optional[str] = None
+    collaborators: Optional[str] = None  # comma-separated emails
+
+
+class FileEditMeta(BaseModel):
+    title: Optional[str] = Field(None, max_length=300)
+    description: Optional[str] = Field(None, max_length=300)
+    collaborators: Optional[str] = None  # comma-separated emails (replaces list)
+
 
 class UserOut(BaseModel):
     id: int
@@ -49,11 +63,13 @@ class UserOut(BaseModel):
     bio: str
     created_at: str
 
+
 class FileOut(BaseModel):
     id: int
     filename: str
     original_name: str
     file_type: str
+    title: str
     description: str
     url: Optional[str]
     created_at: str

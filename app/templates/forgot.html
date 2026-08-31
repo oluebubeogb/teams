@@ -41,7 +41,7 @@
 let verifiedEmail = '', verifiedPhone = '';
 document.getElementById('btn-verify').addEventListener('click', async () => {
   const msg = document.getElementById('fp-msg');
-  msg.textContent = '&';
+  msg.textContent = 'Loading...';
   verifiedEmail = document.getElementById('fp-email').value.trim();
   verifiedPhone = document.getElementById('fp-phone').value.trim();
   try {
@@ -61,7 +61,7 @@ document.getElementById('btn-verify').addEventListener('click', async () => {
 
 document.getElementById('btn-reset').addEventListener('click', async () => {
   const msg = document.getElementById('fp-msg2');
-  msg.textContent = '&';
+  msg.textContent = 'Loading...';
   const newPass = document.getElementById('fp-new').value;
   try {
     const res = await fetch('/api/reset', {
