@@ -2,6 +2,9 @@ import os
 import shutil
 import uuid
 import re
+import mimetypes
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Optional, List
 from datetime import timedelta
@@ -39,6 +42,10 @@ app.add_middleware(
 BASE_DIR = Path(__file__).parent
 UPLOAD_PATH = BASE_DIR / "uploads"
 UPLOAD_PATH.mkdir(exist_ok=True)
+
+# Converted Office previews are cached here. The original upload is never modified.
+PREVIEW_CACHE_PATH = Path(os.getenv("PREVIEW_CACHE_DIR", "/tmp/teams-previews"))
+PREVIEW_CACHE_PATH.mkdir(parents=True, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_PATH)), name="uploads")
@@ -580,9 +587,69 @@ async def api_download(file_id: int, user=Depends(get_current_user)):
     )
 
 
+OFFICE_PREVIEW_TYPES = {"pptx", "docx", "xlsx", "xls"}
+
+def get_office_preview_path(source_path: Path, file_id: int, file_type: str) -> Path:
+    """Convert an Office document to PDF for browser preview and cache the result.
+
+    LibreOffice keeps PowerPoint slide boundaries when exporting to PDF, so each
+    slide remains a separate PDF page. The source Office file is never changed.
+    """
+    cache_name = f"{file_id}-{source_path.stat().st_mtime_ns}-{source_path.stat().st_size}.pdf"
+    cached = PREVIEW_CACHE_PATH / cache_name
+    if cached.exists() and cached.stat().st_size > 0:
+        return cached
+
+    with tempfile.TemporaryDirectory(prefix="teams-office-") as tmp: 
+        tmp_path = Path(tmp)
+        source_copy = tmp_path / source_path.name
+        source_copy.write_bytes(source_path.read_bytes())
+
+        # Give every conversion its own LibreOffice profile so concurrent
+        # previews do not fight over the default profile lock.
+        profile_dir = tmp_path / "profile"
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        profile_dir.mkdir()
+        profile_uri = profile_dir.as_uri()
+
+        command = [
+            "libreoffice",
+            "--headless",
+            f"-env:UserInstallation={profile_uri}",
+            "--convert-to", "pdf",
+            "--outdir", str(output_dir),
+            str(source_copy),
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+        except FileNotFoundError:
+            raise HTTPException(
+                503,
+                "Office preview is unavailable because LibreOffice is not installed on the server."
+            )
+        except subprocess.TimeoutExpired:
+            raise HTTPException(504, "Office preview conversion timed out")
+
+        converted = output_dir / f"{source_copy.stem}.pdf"
+        if result.returncode != 0 or not converted.exists() or converted.stat().st_size == 0:
+            detail = (result.stderr or result.stdout or "Unknown LibreOffice conversion error").strip()
+            raise HTTPException(500, f"Could not convert {file_type.upper()} to PDF for preview: {detail[:500]}")
+
+        cached.write_bytes(converted.read_bytes())
+
+    return cached
+
+
 @app.get("/api/view/{file_id}")
 async def api_view(file_id: int):
-    """Serve file inline so the browser opens it (like Google Drive preview) instead of downloading."""
+    """Preview supported files in the browser; convert Office files to paged PDF."""
     with get_db() as conn:
         row = conn.execute("SELECT * FROM files WHERE id = ?", (file_id,)).fetchone()
         if not row:
@@ -591,15 +658,31 @@ async def api_view(file_id: int):
     row = dict(row)
     if row["file_type"] == "url":
         return RedirectResponse(row["url"])
+
     path = Path(row["storage_path"])
     if not path.exists():
         raise HTTPException(404, "File missing")
 
-    # Determine MIME from the stored type, then fall back to the actual filename.
-    # This prevents unknown/missing file_type values from becoming
-    # application/octet-stream, which makes browsers download instead of preview.
-    import mimetypes
     extension = path.suffix.lower().lstrip(".")
+
+    # Browsers cannot natively render PPTX/DOCX/XLSX. Convert Office files to
+    # PDF first. For PPTX, LibreOffice exports one slide per PDF page, preserving
+    # the normal slide/page structure and allowing the browser's PDF viewer to
+    # handle paging, zoom and fullscreen.
+    if extension in OFFICE_PREVIEW_TYPES or row.get("file_type") in OFFICE_PREVIEW_TYPES:
+        preview_path = get_office_preview_path(path, file_id, extension or row.get("file_type"))
+        return FileResponse(
+            preview_path,
+            media_type="application/pdf",
+            filename=f"{Path(row["original_name"]).stem}.pdf",
+            content_disposition_type="inline",
+            headers={
+                "Content-Disposition": f'inline; filename="{Path(row["original_name"]).stem.replace(chr(34), "")}.pdf"',
+                "X-Content-Type-Options": "nosniff",
+                "Cache-Control": "private, max-age=3600",
+            },
+        )
+
     media = MIME_MAP.get(row.get("file_type")) or MIME_MAP.get(extension) or mimetypes.guess_type(row["original_name"])[0] or "application/octet-stream"
 
     return FileResponse(
