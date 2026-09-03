@@ -12,7 +12,16 @@
         extend: {
           fontFamily: { sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'] },
           colors: {
-            brand: { 50:'#f0f9ff',100:'#e0f2fe',200:'#bae6fd',300:'#7dd3fc',400:'#38bdf8',500:'#0ea5e9',600:'#0284c7',700:'#0369a1',800:'#075985',900:'#0c4a6e' }
+            indigo: {
+              DEFAULT: '#5C5DE2',
+              deep: '#4F55D8',
+              tint: '#E6E6F5'
+            },
+            green: {
+              DEFAULT: '#20A653',
+              soft: '#E3EEE9'
+            },
+            'blue-gray': '#447AA6'
           }
         }
       }
@@ -22,73 +31,388 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f8fafc;
-      --card: #ffffff;
-      --text: #0f172a;
-      --muted: #64748b;
-      --border: #e2e8f0;
-      --accent: #0ea5e9;
+      /* Light mode — exact palette */
+      --bg: #F4F5F7;
+      --bg-elevated: #FEFEFE;
+      --card: #FEFEFE;
+      --card-hover: #FFFFFF;
+      --text: #202022;
+      --muted: #747277;
+      --border: #E5E6E9;
+      --accent: #5C5DE2;
+      --accent-deep: #4F55D8;
+      --accent-green: #20A653;
+      --blue-gray: #447AA6;
+      --indigo-tint: #E6E6F5;
+      --soft-green: #E3EEE9;
+      --shadow: 0 1px 3px rgba(32, 32, 34, 0.04), 0 4px 12px rgba(32, 32, 34, 0.03);
+      --shadow-hover: 0 4px 16px rgba(92, 93, 226, 0.08), 0 2px 6px rgba(32, 32, 34, 0.04);
+      --header-bg: rgba(254, 254, 254, 0.85);
+      --overlay: rgba(32, 32, 34, 0.45);
+      --input-bg: #FEFEFE;
+      --avatar-bg: #5C5DE2;
+      --success-bg: rgba(32, 166, 83, 0.10);
+      --active-bg: rgba(92, 93, 226, 0.10);
     }
+
     .dark {
-      --bg: #0f172a;
-      --card: #1e293b;
-      --text: #f1f5f9;
-      --muted: #94a3b8;
-      --border: #334155;
-      --accent: #38bdf8;
+      --bg: #111217;
+      --bg-elevated: #17191F;
+      --card: #1D2027;
+      --card-hover: #232630;
+      --text: #F2F2F4;
+      --muted: #A7A8B0;
+      --border: #30333D;
+      --accent: #5C5DE2;
+      --accent-deep: #4F55D8;
+      --accent-green: #20A653;
+      --blue-gray: #447AA6;
+      --indigo-tint: rgba(92, 93, 226, 0.12);
+      --soft-green: rgba(32, 166, 83, 0.08);
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.25), 0 4px 14px rgba(0, 0, 0, 0.18);
+      --shadow-hover: 0 4px 20px rgba(92, 93, 226, 0.15), 0 2px 8px rgba(0, 0, 0, 0.2);
+      --header-bg: rgba(23, 25, 31, 0.88);
+      --overlay: rgba(0, 0, 0, 0.55);
+      --input-bg: #1D2027;
+      --avatar-bg: #5C5DE2;
+      --success-bg: rgba(32, 166, 83, 0.14);
+      --active-bg: rgba(92, 93, 226, 0.14);
     }
-    body { background: var(--bg); color: var(--text); font-size: 15px; }
-    .card { background: var(--card); border: 1px solid var(--border); }
+
+    /* Atmospheric background gradients */
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      min-height: 100%;
+      transition: background-color 220ms ease, color 220ms ease;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Light mode gradients */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      pointer-events: none;
+      background:
+        radial-gradient(
+          circle at 15% 12%,
+          rgba(92, 93, 226, 0.09) 0%,
+          rgba(230, 230, 245, 0.06) 25%,
+          transparent 55%
+        ),
+        radial-gradient(
+          circle at 82% 74%,
+          rgba(32, 166, 83, 0.07) 0%,
+          rgba(227, 238, 233, 0.08) 25%,
+          transparent 60%
+        ),
+        radial-gradient(
+          circle at 50% 50%,
+          rgba(254, 254, 254, 0.4) 0%,
+          transparent 70%
+        ),
+        #F4F5F7;
+      transition: opacity 220ms ease;
+    }
+
+    html.dark body::before {
+      background:
+        radial-gradient(
+          circle at 15% 12%,
+          rgba(92, 93, 226, 0.16) 0%,
+          rgba(79, 85, 216, 0.08) 25%,
+          transparent 58%
+        ),
+        radial-gradient(
+          circle at 82% 74%,
+          rgba(32, 166, 83, 0.10) 0%,
+          rgba(32, 166, 83, 0.045) 28%,
+          transparent 62%
+        ),
+        #111217;
+    }
+
+    /* Teamwork abstract background layer */
+    .bg-abstract {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .bg-abstract svg {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      opacity: 0.55;
+    }
+
+    html.dark .bg-abstract svg {
+      opacity: 0.35;
+    }
+
+    /* Soft floating nodes / connection animation */
+    @keyframes float-node {
+      0%, 100% { transform: translate(0, 0); opacity: 0.35; }
+      33% { transform: translate(6px, -8px); opacity: 0.55; }
+      66% { transform: translate(-4px, 5px); opacity: 0.4; }
+    }
+
+    @keyframes pulse-line {
+      0%, 100% { stroke-opacity: 0.12; }
+      50% { stroke-opacity: 0.28; }
+    }
+
+    @keyframes drift {
+      0% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-12px) rotate(1.5deg); }
+      100% { transform: translateY(0) rotate(0deg); }
+    }
+
+    .node {
+      animation: float-node 14s ease-in-out infinite;
+    }
+    .node:nth-child(2) { animation-delay: -3s; animation-duration: 17s; }
+    .node:nth-child(3) { animation-delay: -7s; animation-duration: 12s; }
+    .node:nth-child(4) { animation-delay: -11s; animation-duration: 19s; }
+    .node:nth-child(5) { animation-delay: -5s; animation-duration: 15s; }
+
+    .conn-line {
+      animation: pulse-line 8s ease-in-out infinite;
+    }
+    .conn-line:nth-of-type(2) { animation-delay: -2.5s; }
+    .conn-line:nth-of-type(3) { animation-delay: -5s; }
+
+    .drift-group {
+      animation: drift 22s ease-in-out infinite;
+      transform-origin: center;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .node, .conn-line, .drift-group {
+        animation: none !important;
+      }
+    }
+
+    /* Surfaces */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      transition: background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+    }
+    .card:hover {
+      box-shadow: var(--shadow-hover);
+    }
+
     .muted { color: var(--muted); }
     .accent { color: var(--accent); }
-    input, textarea, select { font-size: 15px !important; }
-    .btn { font-weight: 500; font-size: 15px; }
+    .text-primary { color: var(--text); }
+
+    input, textarea, select {
+      font-size: 15px !important;
+      background: var(--input-bg) !important;
+      color: var(--text) !important;
+      border-color: var(--border) !important;
+      transition: border-color 180ms ease, box-shadow 180ms ease;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--accent) !important;
+      box-shadow: 0 0 0 3px rgba(92, 93, 226, 0.18);
+    }
+
+    .btn {
+      font-weight: 500;
+      font-size: 15px;
+      transition: background-color 180ms ease, transform 120ms ease, box-shadow 180ms ease;
+    }
+    .btn:active { transform: scale(0.98); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: var(--accent-deep);
+    }
+
     .avatar {
       width: 36px; height: 36px; border-radius: 9999px;
       display: flex; align-items: center; justify-content: center;
-      font-weight: 600; font-size: 13px; background: var(--accent); color: white;
+      font-weight: 600; font-size: 13px;
+      background: var(--avatar-bg); color: white;
       flex-shrink: 0;
     }
     .avatar-lg { width: 64px; height: 64px; font-size: 22px; }
+
     .file-icon { width: 20px; height: 20px; }
-    .grid-cards { display: grid; grid-template-columns: 1fr; gap: 1rem; }
-    @media (min-width: 640px) { .grid-cards { grid-template-columns: repeat(2, 1fr); } }
-    @media (min-width: 1024px) { .grid-cards { grid-template-columns: repeat(3, 1fr); } }
+
+    .grid-cards {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+    @media (min-width: 640px) {
+      .grid-cards { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 1024px) {
+      .grid-cards { grid-template-columns: repeat(3, 1fr); }
+    }
+
     .eye-btn { cursor: pointer; color: var(--muted); }
     .eye-btn:hover { color: var(--text); }
+
     ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    /* Header */
+    .site-header {
+      background: var(--header-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      transition: background-color 220ms ease, border-color 220ms ease;
+    }
+
+    /* Footer */
+    .site-footer {
+      margin-top: 6rem;
+      padding-top: 3rem;
+      padding-bottom: 3.5rem;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.01em;
+    }
+
+    /* Focus ring helper */
+    .focus-ring:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(92, 93, 226, 0.22);
+    }
+
+    /* Success / collab accent helpers */
+    .badge-green {
+      background: var(--success-bg);
+      color: var(--accent-green);
+    }
+    .badge-indigo {
+      background: var(--active-bg);
+      color: var(--accent);
+    }
   </style>
   {% block head %}{% endblock %}
 </head>
-<body class="h-full antialiased transition-colors duration-200">
+<body class="h-full antialiased">
+  <!-- Atmospheric abstract teamwork background -->
+  <div class="bg-abstract" aria-hidden="true">
+    <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#5C5DE2" stop-opacity="0.22"/>
+          <stop offset="50%" stop-color="#447AA6" stop-opacity="0.14"/>
+          <stop offset="100%" stop-color="#20A653" stop-opacity="0.18"/>
+        </linearGradient>
+        <linearGradient id="nodeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#5C5DE2" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="#20A653" stop-opacity="0.25"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Soft connecting paths (teamwork / collaboration network) -->
+      <g class="drift-group" fill="none" stroke="url(#lineGrad)" stroke-width="1.1" stroke-linecap="round">
+        <path class="conn-line" d="M120 180 C 280 120, 420 260, 580 200 S 820 140, 980 220" />
+        <path class="conn-line" d="M80 520 C 240 460, 380 580, 560 510 S 860 440, 1100 560" />
+        <path class="conn-line" d="M200 720 C 360 680, 520 780, 720 700 S 1020 640, 1280 740" />
+        <path class="conn-line" d="M1100 120 C 980 200, 860 160, 720 240 S 480 300, 340 260" />
+        <path class="conn-line" d="M1300 420 C 1180 380, 1040 480, 900 420 S 640 360, 480 440" />
+      </g>
+
+      <!-- Nodes representing people / teams -->
+      <g fill="url(#nodeGrad)">
+        <circle class="node" cx="180" cy="190" r="4.5" />
+        <circle class="node" cx="580" cy="205" r="5.5" />
+        <circle class="node" cx="980" cy="225" r="4" />
+        <circle class="node" cx="420" cy="480" r="5" />
+        <circle class="node" cx="720" cy="690" r="4.5" />
+        <circle class="node" cx="1100" cy="550" r="5" />
+        <circle class="node" cx="320" cy="720" r="3.5" />
+        <circle class="node" cx="860" cy="160" r="4" />
+        <circle class="node" cx="1280" cy="380" r="4.5" />
+        <circle class="node" cx="640" cy="380" r="3.8" />
+      </g>
+
+      <!-- Subtle document / paper corner marks (academic feel) -->
+      <g stroke="#5C5DE2" stroke-width="0.9" fill="none" opacity="0.12">
+        <path d="M60 80 L60 140 L120 140" />
+        <path d="M1320 80 L1380 80 L1380 140" />
+        <path d="M60 820 L60 760 L120 760" />
+        <path d="M1320 820 L1380 820 L1380 760" />
+      </g>
+
+      <!-- Tiny annotation marks -->
+      <g fill="#20A653" opacity="0.14">
+        <circle cx="250" cy="340" r="2" />
+        <circle cx="1050" cy="680" r="2.2" />
+        <circle cx="780" cy="520" r="1.8" />
+        <circle cx="480" cy="150" r="2" />
+      </g>
+
+      <!-- Soft arcs suggesting connection / handshake energy -->
+      <g fill="none" stroke="#447AA6" stroke-width="0.9" opacity="0.13">
+        <path d="M400 300 Q 520 260, 640 310" />
+        <path d="M900 600 Q 1020 560, 1140 620" />
+      </g>
+    </svg>
+  </div>
+
   <!-- Header -->
-  <header class="sticky top-0 z-40 border-b card backdrop-blur bg-opacity-90">
+  <header class="site-header sticky top-0 z-40">
     <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
-      <a href="/" class="flex items-center gap-2 font-semibold text-[15px] tracking-tight">
-        <svg class="w-6 h-6 accent" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      <a href="/" class="flex items-center gap-2 font-semibold text-[15px] tracking-tight text-[var(--text)]">
+        <svg class="w-6 h-6" style="color: var(--accent)" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
         Teams
       </a>
       <div class="flex items-center gap-2 sm:gap-3">
-        <button id="theme-toggle" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5" title="Toggle theme" aria-label="Toggle day/night">
+        <button id="theme-toggle" class="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition" title="Toggle theme" aria-label="Toggle day/night">
           <svg id="icon-sun" class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
           <svg id="icon-moon" class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
         </button>
         {% if user %}
-          <a href="/dashboard" class="hidden sm:inline text-[15px] font-medium muted hover:text-[var(--text)]">Dashboard</a>
+          <a href="/dashboard" class="hidden sm:inline text-[15px] font-medium muted hover:text-[var(--text)] transition">Dashboard</a>
           <a href="/u/{{ user.username }}" class="avatar" title="{{ user.full_name }}">{{ user.full_name[:2]|upper if user.full_name else 'U' }}</a>
-          <button onclick="logout()" class="text-[15px] font-medium muted hover:text-[var(--text)]">Logout</button>
+          <button onclick="logout()" class="text-[15px] font-medium muted hover:text-[var(--text)] transition">Logout</button>
         {% else %}
-          <a href="/login" class="text-[15px] font-medium muted hover:text-[var(--text)]">Login</a>
-          <a href="/signup" class="btn px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-[15px] font-medium">Sign up</a>
+          <a href="/login" class="text-[15px] font-medium muted hover:text-[var(--text)] transition">Login</a>
+          <a href="/signup" class="btn btn-primary px-3 py-1.5 rounded-lg text-[15px] font-medium">Sign up</a>
         {% endif %}
       </div>
     </div>
   </header>
 
-  <main class="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+  <main class="max-w-6xl mx-auto px-4 py-6 sm:py-8 relative z-0">
     {% block content %}{% endblock %}
   </main>
+
+  <footer class="site-footer">
+    <div class="max-w-6xl mx-auto px-4">
+      © 2026 CISTECH for Workplace
+    </div>
+  </footer>
 
   <script>
     // Theme

@@ -14,14 +14,14 @@
   <div class="card rounded-2xl p-5 flex-1">
     <label class="block text-[13px] font-medium muted mb-1">Bio</label>
     <textarea id="bio-input" rows="2" maxlength="300" class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[15px]">{{ user.bio or '' }}</textarea>
-    <button onclick="saveBio()" class="mt-2 btn px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-[14px] font-medium">Save bio</button>
+    <button onclick="saveBio()" class="mt-2 btn btn-primary px-3 py-1.5 rounded-lg text-[14px] font-medium">Save bio</button>
     <p id="bio-msg" class="text-[13px] muted mt-1"></p>
   </div>
 </div>
 
 <div class="flex items-center justify-between mb-4">
   <h2 class="text-[15px] font-semibold">Your files</h2>
-  <button onclick="document.getElementById('upload-modal').classList.remove('hidden')" class="btn px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-[15px] font-medium">+ Upload</button>
+  <button onclick="document.getElementById('upload-modal').classList.remove('hidden')" class="btn btn-primary px-3 py-1.5 rounded-lg text-[15px] font-medium">+ Upload</button>
 </div>
 
 {% if files %}
@@ -115,7 +115,7 @@
         <label class="block text-[13px] font-medium muted mb-1">URL</label>
         <input type="url" name="url" placeholder="https://..." class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
       </div>
-      <button type="submit" class="w-full btn py-2.5 rounded-lg bg-[var(--accent)] text-white font-medium">Upload</button>
+      <button type="submit" class="w-full btn btn-primary py-2.5 rounded-lg font-medium">Upload</button>
       <p id="upload-msg" class="text-[13px] text-center muted"></p>
     </form>
   </div>
@@ -147,7 +147,7 @@
         <label class="block text-[13px] font-medium muted mb-1">Replace file (optional)</label>
         <input type="file" id="edit-file" name="file" accept=".pdf,.docx,.pptx,.xlsx,.csv,.xls" class="w-full text-[14px]" />
       </div>
-      <button type="submit" class="w-full btn py-2.5 rounded-lg bg-[var(--accent)] text-white font-medium">Save changes</button>
+      <button type="submit" class="w-full btn btn-primary py-2.5 rounded-lg font-medium">Save changes</button>
       <p id="edit-msg" class="text-[13px] text-center muted"></p>
     </form>
   </div>
