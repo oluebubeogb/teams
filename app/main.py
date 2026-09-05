@@ -18,16 +18,17 @@ from starlette.background import BackgroundTask
 
 from app.database import init_db, get_db
 from app.auth import (
-    hash_password, verify_password, create_access_token,
     get_current_user, require_user, get_user_by_email, get_user_by_phone,
-    get_user_by_username, get_user_by_id
+    get_user_by_username, get_user_by_id,
+    accounts_signup, accounts_login, accounts_update_me, ensure_local_user_from_accounts,
+)
+from app.config import (
+    USE_ACCOUNTS, ACCOUNTS_URL, COOKIE_DOMAIN, COOKIE_SECURE, COOKIE_SAMESITE,
+    UPLOAD_DIR, MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH,
+    MIN_PASSWORD_LENGTH, ALLOWED_EXTENSIONS, ACCESS_TOKEN_EXPIRE_MINUTES,
 )
 from app.models import UserCreate, UserLogin, ForgotPassword, ResetPassword, ProfileUpdate
 from app.utils import generate_username, get_initials, relative_date, extract_text_from_file, score_relevance
-from app.config import (
-    UPLOAD_DIR, MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH,
-    MIN_PASSWORD_LENGTH, ALLOWED_EXTENSIONS, ACCESS_TOKEN_EXPIRE_MINUTES
-)
 
 app = FastAPI(title="Teams", description="Sleek file sharing & discovery", version="1.1.0")
 
@@ -297,103 +298,123 @@ async def public_profile(request: Request, username: str, user=Depends(get_curre
 
 
 # ---------- Auth API ----------
-@app.post("/api/signup")
-async def api_signup(data: UserCreate, response: Response):
-    if len(data.password) < MIN_PASSWORD_LENGTH:
-        raise HTTPException(400, f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
-
-    if get_user_by_email(data.email):
-        raise HTTPException(400, "Email already registered")
-    if get_user_by_phone(data.phone):
-        raise HTTPException(400, "Phone already registered")
-
-    def exists(u):
-        return get_user_by_username(u) is not None
-
-    username = data.username or generate_username(data.full_name, exists)
-    if exists(username):
-        username = generate_username(data.full_name + str(uuid.uuid4())[:4], exists)
-
-    pw_hash = hash_password(data.password)
-    with get_db() as conn:
-        cur = conn.execute(
-            "INSERT INTO users (username, full_name, email, phone, password_hash) VALUES (?, ?, ?, ?, ?)",
-            (username, data.full_name.strip(), data.email, data.phone, pw_hash)
-        )
-        user_id = cur.lastrowid
-        # Link any pending collaborator rows by email
-        conn.execute(
-            "UPDATE file_collaborators SET user_id = ? WHERE email = ? AND user_id IS NULL",
-            (user_id, data.email)
-        )
-
-    token = create_access_token({"sub": str(user_id)})
-    response.set_cookie(
+def _set_access_cookie(response: Response, token: str):
+    kwargs = dict(
         key="access_token",
         value=token,
         httponly=True,
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax",
-        secure=False,
-        path="/"
+        samesite=COOKIE_SAMESITE,
+        secure=COOKIE_SECURE,
+        path="/",
     )
-    return {"ok": True, "username": username, "token": token}
+    if COOKIE_DOMAIN:
+        kwargs["domain"] = COOKIE_DOMAIN
+    response.set_cookie(**kwargs)
+
+
+def _clear_access_cookie(response: Response):
+    kwargs = dict(key="access_token", path="/")
+    if COOKIE_DOMAIN:
+        kwargs["domain"] = COOKIE_DOMAIN
+    response.delete_cookie(**kwargs)
+
+
+@app.post("/api/signup")
+async def api_signup(data: UserCreate, response: Response):
+    """Signup via central Accounts, then ensure local Teams user row."""
+    if len(data.password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(400, f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+
+    if not USE_ACCOUNTS:
+        raise HTTPException(503, "Local signup disabled. Set USE_ACCOUNTS=true and configure ACCOUNTS_URL.")
+
+    # Map Teams fields → Accounts signup
+    username = (data.username or generate_username(data.full_name, lambda u: False)).lower()
+    payload = {
+        "email": data.email.lower().strip(),
+        "password": data.password,
+        "display_name": data.full_name.strip(),
+        "username": username,
+        "phone": data.phone.strip() if data.phone else None,
+    }
+    result, err = await accounts_signup(payload)
+    if err:
+        raise HTTPException(400, err)
+
+    token = result.get("access_token")
+    profile = result.get("user") or {}
+    if not token or not profile:
+        raise HTTPException(500, "Accounts returned incomplete response")
+
+    local = ensure_local_user_from_accounts(profile)
+    _set_access_cookie(response, token)
+    return {"ok": True, "username": local.get("username"), "token": token}
 
 
 @app.post("/api/login")
 async def api_login(data: UserLogin, response: Response):
-    ident = data.identifier.strip().lower()
-    user = get_user_by_email(ident) or get_user_by_phone(data.identifier.strip())
-    if not user or not verify_password(data.password, user["password_hash"]):
-        raise HTTPException(401, "Invalid credentials")
-    # Ensure collab links are up to date
+    """Login via central Accounts (email). Phone-only login is no longer supported."""
+    if not USE_ACCOUNTS:
+        raise HTTPException(503, "Local login disabled. Configure ACCOUNTS_URL.")
+
+    ident = data.identifier.strip()
+    # Prefer email; if phone was entered, try local lookup then accounts email
+    email = ident.lower() if "@" in ident else None
+    if not email:
+        local = get_user_by_phone(ident)
+        if local:
+            email = local["email"]
+        else:
+            raise HTTPException(401, "Please log in with your email address")
+
+    result, err = await accounts_login(email, data.password)
+    if err:
+        raise HTTPException(401, err)
+
+    token = result.get("access_token")
+    profile = result.get("user") or {}
+    if not token or not profile:
+        raise HTTPException(500, "Accounts returned incomplete response")
+
+    local = ensure_local_user_from_accounts(profile)
     with get_db() as conn:
         conn.execute(
             "UPDATE file_collaborators SET user_id = ? WHERE email = ? AND (user_id IS NULL OR user_id != ?)",
-            (user["id"], user["email"], user["id"])
+            (local["id"], local["email"], local["id"]),
         )
-    token = create_access_token({"sub": str(user["id"])})
-    response.set_cookie(
-        key="access_token",
-        value=token,
-        httponly=True,
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax",
-        secure=False,
-        path="/"
-    )
-    return {"ok": True, "username": user["username"], "token": token}
+    _set_access_cookie(response, token)
+    return {"ok": True, "username": local.get("username"), "token": token}
 
 
 @app.post("/api/forgot")
 async def api_forgot(data: ForgotPassword):
-    user = get_user_by_email(data.email.lower().strip())
-    if not user or user["phone"] != data.phone.strip().replace(" ", "").replace("-", ""):
-        raise HTTPException(400, "Email and phone do not match any account")
-    return {"ok": True, "message": "Verified. You may now set a new password."}
+    """Password reset is handled by Accounts."""
+    return {
+        "ok": True,
+        "message": "Use Collab Accounts password reset.",
+        "accounts_url": f"{ACCOUNTS_URL}/docs",
+        "hint": "POST /auth/password-reset/request on Accounts with your email",
+    }
 
 
 @app.post("/api/reset")
 async def api_reset(data: ResetPassword, response: Response):
-    user = get_user_by_email(data.email.lower().strip())
-    if not user or user["phone"] != data.phone.strip().replace(" ", "").replace("-", ""):
-        raise HTTPException(400, "Email and phone do not match")
-    if len(data.new_password) < MIN_PASSWORD_LENGTH:
-        raise HTTPException(400, f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
-    pw_hash = hash_password(data.new_password)
-    with get_db() as conn:
-        conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (pw_hash, user["id"]))
-    token = create_access_token({"sub": str(user["id"])})
-    response.set_cookie(
-        key="access_token", value=token, httponly=True,
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60, samesite="lax", secure=False, path="/"
+    raise HTTPException(
+        400,
+        f"Password reset moved to Accounts. Open {ACCOUNTS_URL}/docs and use /auth/password-reset/*",
     )
-    return {"ok": True, "token": token}
 
 
 @app.post("/api/logout")
 async def api_logout(response: Response):
-    response.delete_cookie("access_token")
+    _clear_access_cookie(response)
+    # Also clear Accounts cookies if shared domain
+    for key in ("access_token", "refresh_token"):
+        kwargs = dict(key=key, path="/")
+        if COOKIE_DOMAIN:
+            kwargs["domain"] = COOKIE_DOMAIN
+        response.delete_cookie(**kwargs)
     return {"ok": True}
 
 
@@ -416,6 +437,23 @@ async def api_me(user=Depends(get_current_user)):
 
 @app.put("/api/profile")
 async def api_update_profile(data: ProfileUpdate, user=Depends(require_user)):
+    """Profile writes go to Accounts (source of truth), then local cache is updated."""
+    token = user.get("_access_token")
+    patch = {}
+    if data.full_name is not None:
+        patch["display_name"] = data.full_name.strip()
+    if data.bio is not None:
+        patch["bio"] = data.bio.strip()[:300]
+
+    if USE_ACCOUNTS and token and patch:
+        profile, err = await accounts_update_me(token, patch)
+        if err:
+            raise HTTPException(400, err)
+        if profile:
+            ensure_local_user_from_accounts(profile)
+            return {"ok": True}
+
+    # Fallback local-only
     with get_db() as conn:
         if data.full_name is not None:
             conn.execute("UPDATE users SET full_name = ? WHERE id = ?", (data.full_name.strip(), user["id"]))

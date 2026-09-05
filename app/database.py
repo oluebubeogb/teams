@@ -38,6 +38,12 @@ def _migrate(conn):
     cols = {r[1] for r in conn.execute("PRAGMA table_info(files)").fetchall()}
     if "title" not in cols:
         conn.execute("ALTER TABLE files ADD COLUMN title TEXT DEFAULT ''")
+
+    user_cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "accounts_id" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN accounts_id TEXT")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_accounts_id ON users(accounts_id)")
+
     conn.execute("""
         CREATE TABLE IF NOT EXISTS file_collaborators (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
