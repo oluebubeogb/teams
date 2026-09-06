@@ -312,6 +312,54 @@
       background: var(--active-bg);
       color: var(--accent);
     }
+
+    /* Premium landing / interaction polish */
+    .hero-shell {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background:
+        radial-gradient(circle at 10% 0%, rgba(92,93,226,.18), transparent 35%),
+        radial-gradient(circle at 90% 100%, rgba(32,166,83,.12), transparent 32%),
+        var(--card);
+      box-shadow: 0 18px 60px rgba(32,32,34,.07);
+    }
+    .dark .hero-shell {
+      box-shadow: 0 24px 80px rgba(0,0,0,.28);
+    }
+    .hero-grid {
+      background-image: linear-gradient(rgba(92,93,226,.055) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(92,93,226,.055) 1px, transparent 1px);
+      background-size: 34px 34px;
+      mask-image: linear-gradient(to bottom, black, transparent 85%);
+      -webkit-mask-image: linear-gradient(to bottom, black, transparent 85%);
+    }
+    .hero-glow {
+      position:absolute; width:260px; height:260px; border-radius:9999px;
+      filter:blur(55px); opacity:.22; pointer-events:none;
+    }
+    .feature-card {
+      background: color-mix(in srgb, var(--card) 88%, transparent);
+      border: 1px solid var(--border);
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+    }
+    .feature-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); border-color: rgba(92,93,226,.35); }
+    .icon-tile {
+      width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+      background:var(--indigo-tint); color:var(--accent);
+    }
+    .hero-badge {
+      display:inline-flex; align-items:center; gap:.45rem; padding:.4rem .7rem; border-radius:9999px;
+      background:var(--active-bg); color:var(--accent); border:1px solid rgba(92,93,226,.15);
+      font-size:12px; font-weight:600;
+    }
+    .hero-search { box-shadow: 0 12px 35px rgba(32,32,34,.08); }
+    .dark .hero-search { box-shadow: 0 16px 45px rgba(0,0,0,.25); }
+    .section-label { color:var(--accent); font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+    .fade-up { animation: fade-up .55s ease both; }
+    @keyframes fade-up { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
+    @media (prefers-reduced-motion: reduce) { .fade-up { animation:none; } .feature-card { transition:none; } }
+
   </style>
   {% block head %}{% endblock %}
 </head>

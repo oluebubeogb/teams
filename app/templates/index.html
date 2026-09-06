@@ -1,98 +1,203 @@
 {% extends "base.html" %}
-{% block title %}{% if query %}Search: {{ query }} - Teams{% else %}Teams - Discover files{% endif %}{% endblock %}
+{% block title %}{% if query %}Search: {{ query }} - Teams{% else %}Teams — Your team's knowledge, in one place{% endif %}{% endblock %}
 
 {% block content %}
+{% if not query %}
+<!-- New Teams landing experience: existing search, upload and discovery remain intact. -->
+<section class="hero-shell rounded-[28px] mb-10">
+  <div class="hero-grid absolute inset-0 pointer-events-none"></div>
+  <div class="hero-glow" style="background:#5C5DE2;left:-80px;top:-100px"></div>
+  <div class="hero-glow" style="background:#20A653;right:-100px;bottom:-120px"></div>
+
+  <div class="relative z-10 px-6 py-10 sm:px-10 sm:py-14 lg:px-14 lg:py-16">
+    <div class="max-w-3xl">
+      <span class="hero-badge fade-up">
+        <span class="w-1.5 h-1.5 rounded-full" style="background:var(--accent-green)"></span>
+        Built for teams that move fast
+      </span>
+
+      <h1 class="fade-up mt-5 text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-[-0.04em] leading-[1.03]">
+        Find the work.<br>
+        <span class="accent">Share the knowledge.</span>
+      </h1>
+
+      <p class="fade-up mt-5 max-w-2xl text-base sm:text-lg leading-relaxed muted">
+        Teams gives your people one calm, searchable place for documents, links and shared knowledge —
+        without losing the simple workflow you already use.
+      </p>
+
+      <form action="/search" method="get" class="fade-up hero-search mt-7 max-w-2xl relative">
+        <input type="search" name="q" placeholder="Search files, documents, links or content..."
+          class="w-full pl-12 pr-28 py-4 rounded-2xl border text-[15px]"
+          autocomplete="off" aria-label="Search Teams">
+        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <button type="submit" class="btn btn-primary absolute right-1.5 top-1.5 bottom-1.5 px-4 rounded-xl font-semibold">Search</button>
+      </form>
+
+      <div class="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-[12px] muted">
+        <span class="flex items-center gap-1.5"><span class="badge-green w-5 h-5 rounded-full flex items-center justify-center">✓</span> Fast discovery</span>
+        <span class="flex items-center gap-1.5"><span class="badge-indigo w-5 h-5 rounded-full flex items-center justify-center">✓</span> Collaborate with teammates</span>
+        <span class="flex items-center gap-1.5"><span class="badge-green w-5 h-5 rounded-full flex items-center justify-center">✓</span> Keep files organised</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="mb-10">
+  <div class="flex items-end justify-between gap-4 mb-5">
+    <div>
+      <p class="section-label">Why Teams</p>
+      <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight mt-1">Everything your team needs to stay aligned.</h2>
+    </div>
+    <span class="hidden sm:block text-[13px] muted">Simple by design. Powerful when you need it.</span>
+  </div>
+
+  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <article class="feature-card rounded-2xl p-5">
+      <div class="icon-tile mb-4">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.2-5.2m2.2-5.3a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z"/></svg>
+      </div>
+      <h3 class="font-semibold text-base">Search that understands</h3>
+      <p class="muted text-[13px] leading-relaxed mt-2">Find documents by name, description and extracted content instead of digging through folders.</p>
+    </article>
+
+    <article class="feature-card rounded-2xl p-5">
+      <div class="icon-tile mb-4">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>
+      </div>
+      <h3 class="font-semibold text-base">Work together</h3>
+      <p class="muted text-[13px] leading-relaxed mt-2">Attach collaborators to shared work and make the people behind each file easy to discover.</p>
+    </article>
+
+    <article class="feature-card rounded-2xl p-5">
+      <div class="icon-tile mb-4">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M4 7.5A2.5 2.5 0 016.5 5h3L12 7.5h5.5A2.5 2.5 0 0120 10v7.5a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 014 17.5v-10z"/></svg>
+      </div>
+      <h3 class="font-semibold text-base">One trusted workspace</h3>
+      <p class="muted text-[13px] leading-relaxed mt-2">Keep files, useful links and team knowledge together in a focused workspace that stays out of the way.</p>
+    </article>
+  </div>
+</section>
+
+<div class="flex items-center justify-between mb-4">
+  <div>
+    <p class="section-label">Workspace</p>
+    <h2 class="text-2xl font-semibold tracking-tight mt-1">Recent activity</h2>
+  </div>
+  {% if user %}
+    <button onclick="document.getElementById('upload-modal').classList.remove('hidden')" class="btn btn-primary px-4 py-2 rounded-xl text-[14px] font-semibold shadow-sm">
+      + Upload
+    </button>
+  {% else %}
+    <a href="/signup" class="btn btn-primary px-4 py-2 rounded-xl text-[14px] font-semibold">Join Teams</a>
+  {% endif %}
+</div>
+
+{% if files %}
+  <div class="grid-cards">
+    {% for f in files %}
+      {% include "partials/file_card.html" %}
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="card rounded-2xl py-16 px-6 text-center">
+    <div class="icon-tile mx-auto mb-4">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m-7-7h14"/></svg>
+    </div>
+    <h3 class="font-semibold text-base">Your workspace is ready</h3>
+    <p class="muted text-[13px] mt-1">{% if user %}Upload the first file and start building your team's knowledge base.{% else %}Sign up to start sharing documents and collaborating.{% endif %}</p>
+    {% if user %}
+      <button onclick="document.getElementById('upload-modal').classList.remove('hidden')" class="btn btn-primary px-4 py-2 rounded-xl text-[14px] font-semibold mt-5">Upload a file</button>
+    {% else %}
+      <a href="/signup" class="btn btn-primary inline-block px-4 py-2 rounded-xl text-[14px] font-semibold mt-5">Create your account</a>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% else %}
+<!-- Existing search experience retained -->
 <div class="mb-8">
-  <form action="/search" method="get" class="relative max-w-xl mx-auto">
-    <input
-      type="search"
-      name="q"
-      value="{{ query or '' }}"
-      placeholder="Search files by content or name..."
-      class="w-full pl-11 pr-4 py-3 rounded-xl card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)] transition"
-      autocomplete="off"
-    />
+  <form action="/search" method="get" class="relative max-w-2xl mx-auto">
+    <input type="search" name="q" value="{{ query or '' }}" placeholder="Search files by content or name..."
+      class="w-full pl-11 pr-28 py-3.5 rounded-xl card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)] transition"
+      autocomplete="off" autofocus>
     <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      <path stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
     </svg>
+    <button class="btn btn-primary absolute right-1.5 top-1.5 bottom-1.5 px-4 rounded-lg font-medium">Search</button>
   </form>
 </div>
 
-{% if query %}
-  <h1 class="text-[15px] font-semibold mb-4">Results for &ldquo;{{ query }}&rdquo;</h1>
-  {% if groups %}
-    {% for ftype, items in groups.items() %}
-      <section class="mb-8">
-        <div class="flex items-center gap-2 mb-3">
-          <span class="text-[13px] font-semibold uppercase tracking-wider muted">{{ ftype }}</span>
-          <span class="text-[13px] muted">({{ items|length }})</span>
-        </div>
-        <div class="grid-cards">
-          {% for f in items %}
-            {% include "partials/file_card.html" %}
-          {% endfor %}
-        </div>
-      </section>
-    {% endfor %}
-  {% else %}
-    <p class="muted text-center py-12">No matching files found.</p>
-  {% endif %}
-{% else %}
-  <div class="flex items-center justify-between mb-4">
-    <h1 class="text-[15px] font-semibold">Recent</h1>
-    {% if user %}
-      <button onclick="document.getElementById('upload-modal').classList.remove('hidden')" class="btn btn-primary px-3 py-1.5 rounded-lg text-[15px] font-medium">
-        + Upload
-      </button>
-    {% endif %}
+<div class="flex items-center justify-between mb-5">
+  <div>
+    <p class="section-label">Search</p>
+    <h1 class="text-2xl font-semibold tracking-tight mt-1">Results for “{{ query }}”</h1>
   </div>
-  {% if files %}
-    <div class="grid-cards">
-      {% for f in files %}
-        {% include "partials/file_card.html" %}
-      {% endfor %}
+  <a href="/" class="text-[13px] accent font-medium hover:underline">Back to home</a>
+</div>
+
+{% if groups %}
+  {% for ftype, items in groups.items() %}
+    <section class="mb-8">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-[12px] font-semibold uppercase tracking-wider muted">{{ ftype }}</span>
+        <span class="text-[12px] muted">({{ items|length }})</span>
+      </div>
+      <div class="grid-cards">
+        {% for f in items %}
+          {% include "partials/file_card.html" %}
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
+{% else %}
+  <div class="card rounded-2xl text-center py-16 px-6">
+    <div class="icon-tile mx-auto mb-4">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z"/></svg>
     </div>
-  {% else %}
-    <p class="muted text-center py-16">No files yet. {% if user %}Be the first to upload!{% else %}<a href="/signup" class="accent">Sign up</a> to upload.{% endif %}</p>
-  {% endif %}
+    <h3 class="font-semibold">No matching files found</h3>
+    <p class="muted text-[13px] mt-1">Try a different keyword, filename or phrase.</p>
+    <a href="/" class="btn btn-primary inline-block px-4 py-2 rounded-xl text-[13px] font-semibold mt-5">Explore recent files</a>
+  </div>
+{% endif %}
 {% endif %}
 
-{% if user %}
-<!-- Upload Modal -->
+{% if user and not query %}
+<!-- Existing upload flow retained unchanged -->
 <div id="upload-modal" class="fixed inset-0 z-50 hidden bg-black/50 flex items-center justify-center p-4">
   <div class="card rounded-2xl w-full max-w-md p-6 shadow-xl max-h-[90vh] overflow-y-auto">
     <div class="flex justify-between items-center mb-4">
-      <h2 class="font-semibold text-[15px]">Upload</h2>
+      <div>
+        <p class="section-label">Workspace</p>
+        <h2 class="font-semibold text-lg mt-0.5">Upload something useful</h2>
+      </div>
       <button type="button" onclick="document.getElementById('upload-modal').classList.add('hidden')" class="muted hover:text-[var(--text)] text-xl leading-none" aria-label="Close">&times;</button>
     </div>
     <form id="upload-form" class="space-y-4">
       <div>
         <label class="block text-[13px] font-medium muted mb-1">Title (max 300 chars)</label>
-        <input type="text" name="title" maxlength="300" required
-               class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+        <input type="text" name="title" maxlength="300" required class="w-full px-3 py-2.5 rounded-lg card border" />
       </div>
       <div>
         <label class="block text-[13px] font-medium muted mb-1">Description (max 300 chars)</label>
-        <textarea name="description" maxlength="300" required rows="3"
-               class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"></textarea>
+        <textarea name="description" maxlength="300" required rows="3" class="w-full px-3 py-2.5 rounded-lg card border"></textarea>
       </div>
       <div>
         <label class="block text-[13px] font-medium muted mb-1">Collaborators (optional, comma-separated emails)</label>
-        <input type="text" name="collaborators" placeholder="alice@example.com, bob@example.com"
-               class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+        <input type="text" name="collaborators" placeholder="alice@example.com, bob@example.com" class="w-full px-3 py-2.5 rounded-lg card border" />
       </div>
       <div>
         <label class="block text-[13px] font-medium muted mb-1">File (pdf, docx, pptx, xlsx, csv)</label>
-        <input type="file" name="file" accept=".pdf,.docx,.pptx,.xlsx,.csv,.xls"
-               class="w-full text-[14px]" />
+        <input type="file" name="file" accept=".pdf,.docx,.pptx,.xlsx,.csv,.xls" class="w-full text-[14px]" />
       </div>
-      <div class="text-center muted text-[13px]">- or -</div>
+      <div class="text-center muted text-[12px]">or</div>
       <div>
         <label class="block text-[13px] font-medium muted mb-1">URL link</label>
-        <input type="url" name="url" placeholder="https://..."
-               class="w-full px-3 py-2 rounded-lg card border focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+        <input type="url" name="url" placeholder="https://..." class="w-full px-3 py-2.5 rounded-lg card border" />
       </div>
-      <button type="submit" class="w-full btn btn-primary py-2.5 rounded-lg font-medium">Upload</button>
+      <button type="submit" class="w-full btn btn-primary py-3 rounded-xl font-semibold">Upload to Teams</button>
       <p id="upload-msg" class="text-[13px] text-center muted"></p>
     </form>
   </div>
@@ -102,23 +207,23 @@
 
 {% block scripts %}
 <script>
-  const form = document.getElementById('upload-form');
-  if (form) {
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const msg = document.getElementById('upload-msg');
-      msg.textContent = 'Uploading...';
-      const fd = new FormData(form);
-      try {
-        const res = await fetch('/api/upload', { method: 'POST', body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Upload failed');
-        msg.textContent = 'Done!';
-        setTimeout(() => location.reload(), 600);
-      } catch (err) {
-        msg.textContent = err.message;
-      }
-    });
-  }
+const form = document.getElementById('upload-form');
+if (form) {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('upload-msg');
+    msg.textContent = 'Uploading...';
+    const fd = new FormData(form);
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Upload failed');
+      msg.textContent = 'Uploaded successfully';
+      setTimeout(() => location.reload(), 600);
+    } catch (err) {
+      msg.textContent = err.message;
+    }
+  });
+}
 </script>
 {% endblock %}
