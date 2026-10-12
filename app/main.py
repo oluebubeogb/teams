@@ -685,6 +685,44 @@ def get_office_preview_path(source_path: Path, file_id: int, file_type: str) -> 
     return cached
 
 
+@app.get("/view/{file_id}", response_class=HTMLResponse)
+async def view_file(request: Request, file_id: int):
+    """HTML wrapper so the browser tab title shows the Teams platform title
+    (not the embedded PDF/Office document title such as 'PptxGenJS Presentation').
+    """
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM files WHERE id = ?", (file_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "File not found")
+    row = dict(row)
+
+    if row["file_type"] == "url":
+        return RedirectResponse(row["url"])
+
+    # Prefer the user-provided title on the platform; fall back to original filename
+    page_title = (row.get("title") or "").strip() or (row.get("original_name") or "File")
+    page_title = page_title[:MAX_TITLE_LENGTH]
+
+    # Types that browsers can display inside an iframe reliably
+    embeddable = {
+        "pdf", "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp",
+        "mp4", "webm", "ogg", "mp3", "wav", "txt", "csv",
+        "pptx", "docx", "xlsx", "xls",  # these are converted to PDF by /api/view
+    }
+    extension = ""
+    if row.get("storage_path"):
+        extension = Path(row["storage_path"]).suffix.lower().lstrip(".")
+    file_type = (row.get("file_type") or extension or "").lower()
+    is_embeddable = file_type in embeddable or extension in embeddable
+
+    return templates.TemplateResponse("view.html", {
+        "request": request,
+        "page_title": page_title,
+        "content_url": f"/api/view/{file_id}",
+        "is_embeddable": is_embeddable,
+    })
+
+
 @app.get("/api/view/{file_id}")
 async def api_view(file_id: int):
     """Preview supported files in the browser; convert Office files to paged PDF."""
@@ -707,29 +745,38 @@ async def api_view(file_id: int):
     # PDF first. For PPTX, LibreOffice exports one slide per PDF page, preserving
     # the normal slide/page structure and allowing the browser's PDF viewer to
     # handle paging, zoom and fullscreen.
+    # Prefer platform title for the suggested filename (sanitized)
+    display_name = (row.get("title") or "").strip() or (row.get("original_name") or "file")
+    display_name = display_name.replace('"', "").replace("/", "-").replace("\\", "-")[:200]
+
     if extension in OFFICE_PREVIEW_TYPES or row.get("file_type") in OFFICE_PREVIEW_TYPES:
         preview_path = get_office_preview_path(path, file_id, extension or row.get("file_type"))
+        safe_pdf_name = f"{display_name}.pdf" if not display_name.lower().endswith(".pdf") else display_name
         return FileResponse(
             preview_path,
             media_type="application/pdf",
-            filename=f"{Path(row["original_name"]).stem}.pdf",
+            filename=safe_pdf_name,
             content_disposition_type="inline",
             headers={
-                "Content-Disposition": f'inline; filename="{Path(row["original_name"]).stem.replace(chr(34), "")}.pdf"',
+                "Content-Disposition": f'inline; filename="{safe_pdf_name}"',
                 "X-Content-Type-Options": "nosniff",
                 "Cache-Control": "private, max-age=3600",
             },
         )
 
     media = MIME_MAP.get(row.get("file_type")) or MIME_MAP.get(extension) or mimetypes.guess_type(row["original_name"])[0] or "application/octet-stream"
+    # Keep original extension on the display name when possible
+    orig_ext = Path(row["original_name"]).suffix
+    if orig_ext and not display_name.lower().endswith(orig_ext.lower()):
+        display_name = f"{display_name}{orig_ext}"
 
     return FileResponse(
         path,
         media_type=media,
-        filename=row["original_name"],
+        filename=display_name,
         content_disposition_type="inline",
         headers={
-            "Content-Disposition": f'inline; filename="{row["original_name"].replace(chr(34), "")}"',
+            "Content-Disposition": f'inline; filename="{display_name}"',
             "X-Content-Type-Options": "nosniff",
             "Cache-Control": "private, max-age=3600",
         },

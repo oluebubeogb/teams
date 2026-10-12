@@ -119,4 +119,4 @@ Optional:
 - Search ranks by simple keyword frequency in extracted text + filename + description.
 - Empty file-type groups are hidden.
 
-Built for Coolify on any VPS...
+Built for Coolify on any VPS.
