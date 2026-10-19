@@ -329,8 +329,12 @@ async def api_signup(data: UserCreate, response: Response):
     if not USE_ACCOUNTS:
         raise HTTPException(503, "Local signup disabled. Set USE_ACCOUNTS=true and configure ACCOUNTS_URL.")
 
-    # Map Teams fields → Accounts signup
-    username = (data.username or generate_username(data.full_name, lambda u: False)).lower()
+    # Username is validated/normalized by UserCreate; check local DB first for a clear message
+    username = data.username  # already lowercased + format-checked
+    if get_user_by_username(username):
+        raise HTTPException(400, "Username already registered")
+
+    # Map Teams fields → Accounts signup (Accounts is source of truth for uniqueness)
     payload = {
         "email": data.email.lower().strip(),
         "password": data.password,
@@ -340,6 +344,11 @@ async def api_signup(data: UserCreate, response: Response):
     }
     result, err = await accounts_signup(payload)
     if err:
+        err_lower = err.lower()
+        if "username" in err_lower and ("taken" in err_lower or "already" in err_lower or "exists" in err_lower):
+            raise HTTPException(400, "Username already registered")
+        if "email" in err_lower and ("registered" in err_lower or "already" in err_lower or "exists" in err_lower):
+            raise HTTPException(400, "Email already registered")
         raise HTTPException(400, err)
 
     token = result.get("access_token")

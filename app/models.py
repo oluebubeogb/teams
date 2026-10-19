@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
+import re
 
 
 class UserCreate(BaseModel):
@@ -7,7 +8,7 @@ class UserCreate(BaseModel):
     email: str = Field(..., min_length=5)
     phone: str = Field(..., min_length=7, max_length=20)
     password: str = Field(..., min_length=6)
-    username: Optional[str] = None
+    username: str = Field(..., min_length=3, max_length=64)
 
     @field_validator("email")
     @classmethod
@@ -18,6 +19,17 @@ class UserCreate(BaseModel):
     @classmethod
     def phone_clean(cls, v):
         return v.strip().replace(" ", "").replace("-", "")
+
+    @field_validator("username")
+    @classmethod
+    def username_format(cls, v: str) -> str:
+        """Match Collab Accounts rules: 3–63 chars, start with letter/number, only a-z 0-9 _ -"""
+        v = v.strip().lower()
+        if not re.match(r"^[a-z0-9][a-z0-9_-]{2,62}$", v):
+            raise ValueError(
+                "Username must be 3–63 chars, start with letter/number, only a-z 0-9 _ -"
+            )
+        return v
 
 
 class UserLogin(BaseModel):
