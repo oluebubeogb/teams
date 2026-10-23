@@ -73,7 +73,7 @@ def upsert_user(profile: dict) -> dict:
             clash = c.execute("SELECT id FROM users WHERE lower(username)=%s AND id<>%s", (username, uid)).fetchone()
             c.execute(f"""UPDATE users SET accounts_id=COALESCE(NULLIF(%s,''),accounts_id), full_name=%s, email=%s,
                          username=CASE WHEN %s THEN username ELSE %s END,
-                         phone=COALESCE(NULLIF(%s,''),phone), bio=COALESCE(%s,bio),
+                         phone=COALESCE(NULLIF(%s,''),phone), bio=COALESCE(NULLIF(%s,''),bio),
                          avatar_url=%s, avatar_color=COALESCE(%s,avatar_color), last_seen_at=now()
                          WHERE id=%s""",
                       (accounts_id, name, email, bool(clash), username, profile.get("phone") or "",
