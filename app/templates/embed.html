@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ f.title }} · Collab Teams</title><link rel="stylesheet" href="/static/css/app.css?v={{ asset_v }}">
+<style>body{background:transparent}.e{max-width:520px;margin:0 auto}.e .card{margin:0}</style></head>
+<body><div class="e"><article class="card">
+<div class="card-h"><span class="av sm" style="--c:{{ f.author.color }}">{% if f.author.avatar %}<img src="{{ f.author.avatar }}" alt="">{% else %}{{ f.author.initials }}{% endif %}</span>
+<div class="who"><b>{{ f.author.name }}</b><div class="sub">{% if f.org %}{{ f.org.name }} · {% endif %}{{ f.ago }}</div></div></div>
+<a class="card-b" style="display:block" href="{{ cfg.APP_URL }}/f/{{ f.id }}?src=embed{% if k %}&k={{ k }}{% endif %}" target="_blank" rel="noopener"><h3 class="card-t">{{ f.title }}</h3>{% if f.description %}<p class="card-d clamp-2">{{ f.description }}</p>{% endif %}</a>
+{% if f.thumb %}<a class="thumb" style="display:block" href="{{ cfg.APP_URL }}/f/{{ f.id }}?src=embed{% if k %}&k={{ k }}{% endif %}" target="_blank" rel="noopener"><img class="ok" src="{{ f.thumb }}{% if k %}&k={{ k }}{% endif %}" alt=""><span class="ft">{{ f.type|upper }}</span></a>{% endif %}
+<div class="actions"><span class="act">♥ {{ f.counts.like }}</span><span class="act">↓ {{ f.counts.download }}</span><span class="sp"></span><a class="btn sm primary" target="_blank" rel="noopener" href="{{ cfg.APP_URL }}/f/{{ f.id }}?src=embed{% if k %}&k={{ k }}{% endif %}">Open on Teams</a></div>
+</article></div></body></html>

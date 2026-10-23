@@ -1,0 +1,89 @@
+# Teams v2 — app + PostgreSQL. Built for Coolify (Docker Compose build pack).
+# Every variable is listed here as KEY: ${KEY:-default} so Coolify shows it in the Environment Variables tab.
+# Coolify routes traffic to the app via its proxy: set the domain on the "app" service and port 8008. No host ports are published.
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    expose:
+      - "8008"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - teams-data:/app/data
+    mem_limit: ${APP_MEM_LIMIT:-1g}
+    environment:
+      # --- App
+      APP_NAME: ${APP_NAME:-Teams}
+      APP_URL: ${APP_URL:-https://teams.collab.name.ng}
+      SECRET_KEY: ${SECRET_KEY:-change-me-to-a-long-random-string}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
+      # --- Auth: accounts (Collab Accounts SSO) | local (demo: email-only sign-in)
+      AUTH_MODE: ${AUTH_MODE:-accounts}
+      ACCOUNTS_URL: ${ACCOUNTS_URL:-https://accounts.collab.name.ng}
+      ACCOUNTS_ME_CACHE_SECONDS: ${ACCOUNTS_ME_CACHE_SECONDS:-60}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-.collab.name.ng}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      COOKIE_SAMESITE: ${COOKIE_SAMESITE:-lax}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # --- Database (the bundled db service; point elsewhere to use a managed Postgres)
+      POSTGRES_USER: ${POSTGRES_USER:-teams}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-db-password}
+      POSTGRES_DB: ${POSTGRES_DB:-teams}
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      # Optional full URL; overrides the POSTGRES_* values above (e.g. a managed Postgres)
+      DATABASE_URL: ${DATABASE_URL:-}
+      DB_POOL_MIN: ${DB_POOL_MIN:-1}
+      DB_POOL_MAX: ${DB_POOL_MAX:-6}
+      # --- Storage: local (volume teams-data) | s3 (any S3-compatible: R2, B2, MinIO, AWS)
+      DATA_DIR: ${DATA_DIR:-/app/data}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+      S3_REGION: ${S3_REGION:-auto}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-}
+      CACHE_DIR: ${CACHE_DIR:-/tmp/teams-cache}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
+      WORKER_THREADS: ${WORKER_THREADS:-1}
+      THUMBNAILS: ${THUMBNAILS:-true}
+      # --- Optional AI tagging/summaries (OpenAI-compatible). Leave blank to disable.
+      AI_PRIMARY_BASE_URL: ${AI_PRIMARY_BASE_URL:-}
+      AI_PRIMARY_API_KEY: ${AI_PRIMARY_API_KEY:-}
+      AI_PRIMARY_MODEL: ${AI_PRIMARY_MODEL:-}
+      AI_SECONDARY_BASE_URL: ${AI_SECONDARY_BASE_URL:-}
+      AI_SECONDARY_API_KEY: ${AI_SECONDARY_API_KEY:-}
+      AI_SECONDARY_MODEL: ${AI_SECONDARY_MODEL:-}
+      AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-45}
+      AI_AUTO_TAG: ${AI_AUTO_TAG:-true}
+      # --- Moderation
+      ADMIN_USERNAMES: ${ADMIN_USERNAMES:-}
+      VERIFIED_ORGS: ${VERIFIED_ORGS:-}
+      REPORT_AUTOHIDE_THRESHOLD: ${REPORT_AUTOHIDE_THRESHOLD:-5}
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    expose:
+      - "5432"
+    mem_limit: ${DB_MEM_LIMIT:-512m}
+    shm_size: 128mb
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-teams}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-db-password}
+      POSTGRES_DB: ${POSTGRES_DB:-teams}
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "work_mem=8MB", "-c", "max_connections=40"]
+    volumes:
+      - teams-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-teams} -d ${POSTGRES_DB:-teams}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  teams-data:
+  teams-pg:

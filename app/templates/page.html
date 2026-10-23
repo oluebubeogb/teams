@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ meta.title }}</title>
+<meta name="description" content="{{ meta.description }}">
+<meta name="theme-color" content="#f6f6f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0b12" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+{% if not robots|default(true) %}<meta name="robots" content="noindex">{% endif %}
+<meta property="og:site_name" content="Collab Teams">
+<meta property="og:title" content="{{ meta.title }}">
+<meta property="og:description" content="{{ meta.description }}">
+<meta property="og:type" content="{{ meta.type }}">
+<meta property="og:url" content="{{ meta.url }}">
+<meta property="og:image" content="{{ meta.image }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ meta.title }}">
+<meta name="twitter:description" content="{{ meta.description }}">
+<meta name="twitter:image" content="{{ meta.image }}">
+<link rel="canonical" href="{{ meta.url }}">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/static/img/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/img/icon-192.png">
+<link rel="preload" href="/static/fonts/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/css/app.css?v={{ asset_v }}">
+<script>(function(){try{var t=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.dataset.theme=t}catch(e){}})()</script>
+</head>
+<body>
+{% include "icons.html" %}
+{% if page in ("auth",) %}
+<div id="view"></div>
+{% else %}
+<div class="shell">
+  <aside class="side">
+    <a class="brand" href="/"><span class="brand-mark"><svg class="icon" style="width:18px;height:18px;stroke-width:2.2"><use href="#i-layers"/></svg></span><span>Teams <small>by Collab</small></span></a>
+    <nav class="nav">
+      <a href="/" data-nav="home" data-tip-r="Home"><svg class="icon"><use href="#i-home"/></svg><span class="lbl">Home</span></a>
+      <a href="/top" data-nav="top" data-tip-r="Top lists"><svg class="icon"><use href="#i-trophy"/></svg><span class="lbl">Top lists</span></a>
+      <a href="/search" data-nav="search" data-tip-r="Search"><svg class="icon"><use href="#i-search"/></svg><span class="lbl">Search</span></a>
+      <a href="/orgs" data-nav="orgs" data-tip-r="Organizations"><svg class="icon"><use href="#i-building"/></svg><span class="lbl">Organizations</span></a>
+      {% if me %}
+      <div class="nav-sep"></div>
+      <a href="/library" data-nav="library" data-tip-r="Library"><svg class="icon"><use href="#i-library"/></svg><span class="lbl">Library</span></a>
+      <a href="/activity" data-nav="activity" data-tip-r="Activity"><svg class="icon"><use href="#i-bell"/></svg><span class="lbl">Activity</span><span class="badge social hide" data-ncount></span></a>
+      <a href="/analytics" data-nav="analytics" data-tip-r="Analytics"><svg class="icon"><use href="#i-chart"/></svg><span class="lbl">Analytics</span></a>
+      {% if me.is_admin %}<a href="/admin" data-nav="admin" data-tip-r="Moderation"><svg class="icon"><use href="#i-shield"/></svg><span class="lbl">Moderation</span></a>{% endif %}
+      {% endif %}
+    </nav>
+    {% if me %}<a class="btn primary lg cta" href="/upload" data-tip-r="Upload"><svg class="icon"><use href="#i-plus"/></svg><span>Upload</span></a>{% endif %}
+    <div class="side-foot">
+      {% if me %}
+      <button class="me-chip" data-menu="me">
+        <span class="av sm" style="--c:{{ me.color }}">{% if me.avatar %}<img src="{{ me.avatar }}" alt="">{% else %}{{ me.initials }}{% endif %}</span>
+        <span class="who grow" style="text-align:left;line-height:1.2"><b style="font-size:14px;font-weight:600" class="clamp-1">{{ me.name }}</b><span class="muted" style="font-size:12.5px">@{{ me.username }}</span></span>
+      </button>
+      {% else %}
+      <a class="btn primary block" href="/login"><span class="lbl">Sign in</span><svg class="icon sm"><use href="#i-chev-r"/></svg></a>
+      {% endif %}
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar" id="topbar">
+      <a class="m-brand" href="/"><span class="brand-mark" style="width:28px;height:28px;border-radius:9px"><svg class="icon" style="width:16px;height:16px;stroke-width:2.2"><use href="#i-layers"/></svg></span>Teams</a>
+      <form class="searchbox" action="/search" autocomplete="off" role="search">
+        <svg class="icon"><use href="#i-search"/></svg>
+        <input name="q" id="q" placeholder="Search documents, people, organizations…" aria-label="Search" value="{{ request.query_params.get('q','') }}">
+      </form>
+      <div class="top-actions">
+        <button class="iconbtn m-only" data-act="open-search" aria-label="Search"><svg class="icon"><use href="#i-search"/></svg></button>
+        <button class="iconbtn" data-act="theme" aria-label="Toggle theme" data-tip="Theme"><svg class="icon"><use href="#i-moon"/></svg></button>
+        {% if me %}
+        <a class="iconbtn" href="/activity" aria-label="Notifications" data-tip="Notifications"><svg class="icon"><use href="#i-bell"/></svg><span class="dot hide" data-ncount></span></a>
+        {% else %}
+        <a class="btn sm primary" href="/login">Sign in</a>
+        {% endif %}
+      </div>
+    </header>
+    <main id="view" class="content"></main>
+  </div>
+</div>
+<nav class="tabbar">
+  <a href="/" data-nav="home"><svg class="icon"><use href="#i-home"/></svg>Home</a>
+  <a href="/top" data-nav="top"><svg class="icon"><use href="#i-compass"/></svg>Explore</a>
+  <a href="{{ '/upload' if me else '/login?next=/upload' }}" class="plus" aria-label="Upload"><span><svg class="icon"><use href="#i-plus"/></svg></span></a>
+  <a href="{{ '/activity' if me else '/login?next=/activity' }}" data-nav="activity"><svg class="icon"><use href="#i-bell"/></svg>Activity<span class="dot hide" data-ncount></span></a>
+  <a href="{{ '/library' if me else '/login?next=/library' }}" data-nav="library">{% if me %}<span class="av xs" style="--c:{{ me.color }};margin:1px">{% if me.avatar %}<img src="{{ me.avatar }}" alt="">{% else %}{{ me.initials }}{% endif %}</span>{% else %}<svg class="icon"><use href="#i-user"/></svg>{% endif %}You</a>
+</nav>
+{% endif %}
+<div class="toasts" id="toasts"></div>
+<script id="boot" type="application/json">{{ boot|safe }}</script>
+<script src="/static/js/app.js?v={{ asset_v }}" defer></script>
+</body>
+</html>
