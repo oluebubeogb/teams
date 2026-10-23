@@ -18,7 +18,7 @@ from app import config
 from app.auth import get_current_user
 from app.core import card, file_or_404, get_file, initials, is_site_admin, org_avatar_url, org_cover_url, queue_pending, thumb_url
 from app.db import close_pool, q1, run_migrations
-from app.routers import analytics, discover, files, orgs, social, users
+from app.routers import analytics, discover, files, orgs, social, suite, users
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 BASE = Path(__file__).resolve().parent
@@ -50,7 +50,7 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates")
 templates.env.globals.update(cfg=config, asset_v=ASSET_V)
 
-for r in (files, social, orgs, discover, analytics, users):
+for r in (files, social, orgs, discover, analytics, users, suite):
     app.include_router(r.router)
 
 

@@ -33,6 +33,7 @@ def org_out(o: dict, user: Optional[dict] = None, stats: bool = True) -> dict:
         "website": o["website"], "location": o["location"], "accent": o["accent"],
         "avatar": org_avatar_url(o["slug"], o["avatar_key"]), "cover": org_cover_url(o["slug"], o["cover_key"]),
         "verified": org_verified(o), "initials": initials(o["name"]), "created_at": iso(o["created_at"]),
+        "source": o.get("source") or "teams", "org_type": o.get("org_type") or "company",
     }
     if stats:
         s = q1("""SELECT (SELECT count(*) FROM org_members WHERE org_id=%(o)s AND status='active') AS members,

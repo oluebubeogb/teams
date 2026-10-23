@@ -97,3 +97,12 @@ app/
   templates/         page.html shell, icons.html sprite, embed
 scripts/             seed.py, smoke_test.py, migrate_sqlite.py
 ```
+
+## Collab Suite org sync (Crede ⇄ Teams)
+
+Set the same long random `SUITE_SYNC_TOKEN` on Teams and Crede. Blank disables the endpoints (they return 503).
+
+- `GET /api/suite/orgs?since=ISO&limit=200` — every org (any source) with members (`accounts_id`, `email`, `role`). `since` returns only orgs changed after that time (member changes count).
+- `POST /api/suite/orgs/upsert` — create or update an org created in another app. Body: `source` (e.g. `crede`), `external_id`, `name`, `about`, `website`, `location`, `org_type` (`company|school|issuer`), `owner {accounts_id,email,full_name}`, `members[]`. Idempotent on `(source, external_id)`; slugs never collide. Members who have not used Teams yet get an email invite that attaches on first sign-in.
+
+Auth: `Authorization: Bearer <SUITE_SYNC_TOKEN>` (or `X-Suite-Token`). Migration `002_suite_sync.sql` adds `orgs.source`, `external_id`, `org_type` and `updated_at`.

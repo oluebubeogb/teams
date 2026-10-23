@@ -63,6 +63,8 @@ services:
       ADMIN_USERNAMES: ${ADMIN_USERNAMES:-}
       VERIFIED_ORGS: ${VERIFIED_ORGS:-}
       REPORT_AUTOHIDE_THRESHOLD: ${REPORT_AUTOHIDE_THRESHOLD:-5}
+      # --- Collab Suite org sync (Crede <-> Teams). Use the SAME long random value on Crede. Blank disables /api/suite/*.
+      SUITE_SYNC_TOKEN: ${SUITE_SYNC_TOKEN:-}
 
   db:
     image: postgres:16-alpine

@@ -173,6 +173,30 @@ def main():
     check("analytics scope denied", C.get("/api/analytics", params={"scope": "site"}).status_code == 403)
     check("analytics org denied to non-member", C.get("/api/analytics", params={"scope": f"org:{slug}"}).status_code == 403)
 
+    print("suite sync")
+    tok = os.getenv("SUITE_SYNC_TOKEN", "")
+    check("suite rejects missing token", anon.get("/api/suite/orgs").status_code in (401, 503))
+    if tok:
+        H = {"Authorization": f"Bearer {tok}"}
+        check("suite rejects bad token", anon.get("/api/suite/orgs", headers={"Authorization": "Bearer nope"}).status_code == 401)
+        r = anon.get("/api/suite/orgs", headers=H)
+        check("suite list orgs", r.status_code == 200 and any(o["slug"] == slug for o in r.json()["orgs"]), r.text[:200])
+        listed = next((o for o in r.json().get("orgs", []) if o["slug"] == slug), {})
+        check("suite org has members", any(m["email"] == f"sa{tag}@smoke.test" for m in listed.get("members", [])), listed)
+        ext = f"crede-{tag}"
+        body = {"source": "crede", "external_id": ext, "name": f"Crede Org {tag}", "org_type": "school",
+                "about": "From Crede", "owner": {"email": f"owner{tag}@smoke.test", "full_name": "Crede Owner"},
+                "members": [{"email": f"sb{tag}@smoke.test", "role": "admin"}, {"email": f"new{tag}@smoke.test"}]}
+        r1 = anon.post("/api/suite/orgs/upsert", json=body, headers=H)
+        check("suite upsert creates", r1.status_code == 200 and r1.json()["created"], r1.text[:200])
+        body["about"] = "Updated from Crede"
+        r2 = anon.post("/api/suite/orgs/upsert", json=body, headers=H)
+        check("suite upsert is idempotent", r2.status_code == 200 and not r2.json()["created"] and r2.json()["id"] == r1.json()["id"], r2.text[:200])
+        r = anon.get(f"/api/orgs/{r1.json()['slug']}")
+        check("crede org visible in Teams", r.status_code == 200 and (r.json().get("org") or r.json()).get("source") == "crede", r.text[:200])
+        since = anon.get("/api/suite/orgs", params={"since": "2000-01-01T00:00:00Z", "limit": 5}, headers=H)
+        check("suite since filter", since.status_code == 200 and since.json()["count"] <= 5, since.text[:200])
+
     print("pages")
     for p in ["/", "/explore", "/top", f"/f/{pub['id']}", f"/u/sa{tag}", "/search?q=zebra", "/t/health", "/login", "/manifest.webmanifest", "/sw.js"]:
         r = anon.get(p)

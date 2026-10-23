@@ -92,3 +92,6 @@ AI_AUTO_TAG = env_bool("AI_AUTO_TAG", True)
 ADMIN_USERNAMES = env_list("ADMIN_USERNAMES")      # site admins (moderation, verify orgs)
 VERIFIED_ORGS = env_list("VERIFIED_ORGS")          # org slugs always shown as verified
 REPORT_AUTOHIDE_THRESHOLD = env_int("REPORT_AUTOHIDE_THRESHOLD", 5)
+
+# Collab Suite service-to-service sync (Crede <-> Teams). Same value on both apps; blank disables /api/suite/*.
+SUITE_SYNC_TOKEN = env("SUITE_SYNC_TOKEN")
