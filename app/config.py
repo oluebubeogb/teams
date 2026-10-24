@@ -77,6 +77,11 @@ ALLOWED_EXTENSIONS = {
 # Background work (thumbnails, LibreOffice). 1 keeps memory low on a small VPS.
 WORKER_THREADS = env_int("WORKER_THREADS", 1)
 THUMBNAILS = env_bool("THUMBNAILS", True)
+THUMB_EDGE = env_int("THUMB_EDGE", 1400)              # long edge of the card image (2x a ~620px card)
+THUMB_SMALL_EDGE = env_int("THUMB_SMALL_EDGE", 480)   # lists, covers, notifications
+THUMB_QUALITY = env_int("THUMB_QUALITY", 82)          # WebP quality
+THUMB_BACKFILL_ON_BOOT = env_bool("THUMB_BACKFILL_ON_BOOT", True)   # regenerate older thumbnails in the background
+THUMB_BACKFILL_DELAY_SECONDS = env_int("THUMB_BACKFILL_DELAY_SECONDS", 2)
 
 # Optional AI (OpenAI-compatible). Disabled when no primary/secondary base URL is set.
 AI_PRIMARY_BASE_URL = env("AI_PRIMARY_BASE_URL").rstrip("/")
@@ -87,6 +92,21 @@ AI_SECONDARY_API_KEY = env("AI_SECONDARY_API_KEY")
 AI_SECONDARY_MODEL = env("AI_SECONDARY_MODEL")
 AI_TIMEOUT_SECONDS = env_int("AI_TIMEOUT_SECONDS", 45)
 AI_AUTO_TAG = env_bool("AI_AUTO_TAG", True)
+AI_MIN_INTERVAL_MS = env_int("AI_MIN_INTERVAL_MS", 1500)     # gentle spacing between AI calls (credits / rate limits)
+AI_MAX_INPUT_CHARS = env_int("AI_MAX_INPUT_CHARS", 6000)     # document text sent per call
+# AI titles & descriptions: default for new uploads (users can switch it off per upload session)
+AI_META_DEFAULT = env_bool("AI_META_DEFAULT", True)
+# Backfill older files with AI titles/descriptions in the background after boot (throttled, resumable)
+AI_BACKFILL_ON_BOOT = env_bool("AI_BACKFILL_ON_BOOT", True)
+AI_BACKFILL_BATCH = env_int("AI_BACKFILL_BATCH", 20)
+AI_BACKFILL_DELAY_SECONDS = env_int("AI_BACKFILL_DELAY_SECONDS", 4)
+AI_BACKFILL_START_DELAY_SECONDS = env_int("AI_BACKFILL_START_DELAY_SECONDS", 30)
+AI_BACKFILL_MAX_PER_BOOT = env_int("AI_BACKFILL_MAX_PER_BOOT", 0)   # 0 = no cap
+AI_BACKFILL_ONLY_DEFAULT_TITLES = env_bool("AI_BACKFILL_ONLY_DEFAULT_TITLES", False)
+
+# Document metadata (Title/Author/Subject/Keywords) stamped into previews and downloads from Teams data
+META_STAMP = env_bool("META_STAMP", True)
+META_CACHE_MB = env_int("META_CACHE_MB", 400)                # disk cap for stamped copies under CACHE_DIR/meta
 
 # Moderation / badges
 ADMIN_USERNAMES = env_list("ADMIN_USERNAMES")      # site admins (moderation, verify orgs)

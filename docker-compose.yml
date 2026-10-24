@@ -50,6 +50,11 @@ services:
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
       WORKER_THREADS: ${WORKER_THREADS:-1}
       THUMBNAILS: ${THUMBNAILS:-true}
+      THUMB_EDGE: ${THUMB_EDGE:-1400}
+      THUMB_SMALL_EDGE: ${THUMB_SMALL_EDGE:-480}
+      THUMB_QUALITY: ${THUMB_QUALITY:-82}
+      THUMB_BACKFILL_ON_BOOT: ${THUMB_BACKFILL_ON_BOOT:-true}
+      THUMB_BACKFILL_DELAY_SECONDS: ${THUMB_BACKFILL_DELAY_SECONDS:-2}
       # --- Optional AI tagging/summaries (OpenAI-compatible). Leave blank to disable.
       AI_PRIMARY_BASE_URL: ${AI_PRIMARY_BASE_URL:-}
       AI_PRIMARY_API_KEY: ${AI_PRIMARY_API_KEY:-}
@@ -59,6 +64,20 @@ services:
       AI_SECONDARY_MODEL: ${AI_SECONDARY_MODEL:-}
       AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-45}
       AI_AUTO_TAG: ${AI_AUTO_TAG:-true}
+      AI_MIN_INTERVAL_MS: ${AI_MIN_INTERVAL_MS:-1500}
+      AI_MAX_INPUT_CHARS: ${AI_MAX_INPUT_CHARS:-6000}
+      # AI title & description for new uploads (users can switch it off per upload session)
+      AI_META_DEFAULT: ${AI_META_DEFAULT:-true}
+      # Background AI titles/descriptions for older files after boot (throttled, resumable, never blocks startup)
+      AI_BACKFILL_ON_BOOT: ${AI_BACKFILL_ON_BOOT:-true}
+      AI_BACKFILL_BATCH: ${AI_BACKFILL_BATCH:-20}
+      AI_BACKFILL_DELAY_SECONDS: ${AI_BACKFILL_DELAY_SECONDS:-4}
+      AI_BACKFILL_START_DELAY_SECONDS: ${AI_BACKFILL_START_DELAY_SECONDS:-30}
+      AI_BACKFILL_MAX_PER_BOOT: ${AI_BACKFILL_MAX_PER_BOOT:-0}
+      AI_BACKFILL_ONLY_DEFAULT_TITLES: ${AI_BACKFILL_ONLY_DEFAULT_TITLES:-false}
+      # Document properties (Title/Author/Subject/Keywords) stamped into previews & downloads
+      META_STAMP: ${META_STAMP:-true}
+      META_CACHE_MB: ${META_CACHE_MB:-400}
       # --- Moderation
       ADMIN_USERNAMES: ${ADMIN_USERNAMES:-}
       VERIFIED_ORGS: ${VERIFIED_ORGS:-}

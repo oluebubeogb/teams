@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app import config
+from app import ai, backfill, config
 from app.auth import get_current_user
 from app.core import card, file_or_404, get_file, initials, is_site_admin, org_avatar_url, org_cover_url, queue_pending, thumb_url
 from app.db import close_pool, q1, run_migrations
@@ -22,7 +22,7 @@ from app.routers import analytics, discover, files, orgs, social, suite, users
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 BASE = Path(__file__).resolve().parent
-ASSET_V = "2.0.0"
+ASSET_V = "2.2.0"
 
 app = FastAPI(title=config.APP_NAME, version="2.0.0", docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json")
 
@@ -60,10 +60,12 @@ def startup():
     Path(config.CACHE_DIR).mkdir(parents=True, exist_ok=True)
     run_migrations()
     queue_pending()
+    backfill.start_on_boot()  # AI titles/descriptions for older files: background, throttled, never blocks boot
 
 
 @app.on_event("shutdown")
 def shutdown():
+    backfill.stop()
     close_pool()
 
 
@@ -97,7 +99,8 @@ def ctx(request: Request, user, page: str, title: str = "", data=None, meta: Opt
     if meta:
         m.update({k: v for k, v in meta.items() if v})
     boot = {"me": me_json(user), "page": page, "data": data, "accounts_url": config.ACCOUNTS_URL,
-            "auth_mode": config.AUTH_MODE, "app_url": config.APP_URL, "max_mb": config.MAX_UPLOAD_MB}
+            "auth_mode": config.AUTH_MODE, "app_url": config.APP_URL, "max_mb": config.MAX_UPLOAD_MB,
+            "ai_enabled": ai.enabled(), "ai_meta_default": config.AI_META_DEFAULT}
     return dict(request=request, user=user, me=boot["me"], page=page, meta=m,
                 boot=json.dumps(boot, default=str).replace("</", "<\\/"), **kw)
 

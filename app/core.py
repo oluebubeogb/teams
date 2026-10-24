@@ -15,7 +15,7 @@ from psycopg.types.json import Jsonb
 from app import ai, config
 from app.auth import avatar_src
 from app.db import q, q1, tx
-from app.extract import IMAGE_TYPES, TEXT_TYPES, keywords, make_thumbnail, slugify, snippet
+from app.extract import DECK_TYPES, IMAGE_TYPES, THUMB_REV, TEXT_TYPES, keywords, make_thumbs, slugify, snippet
 from app.storage import store
 
 log = logging.getLogger("teams.core")
@@ -30,9 +30,10 @@ VIS = """((f.hidden = false OR f.user_id = %(uid)s) AND (
                                           AND m.user_id = %(uid)s AND m.status = 'active'))))"""
 
 FILE_SELECT = """SELECT f.id, f.user_id, f.org_id, f.visibility, f.link_token, f.title, f.description, f.file_type,
-  f.original_name, f.url, f.size_bytes, f.page_count, f.thumb_key, f.thumb_status, f.tags, f.ai_summary, f.version,
+  f.original_name, f.url, f.size_bytes, f.page_count, f.thumb_key, f.thumb_status, f.thumb_w, f.thumb_h, f.thumb_rev, f.tags, f.ai_summary, f.version,
   f.hidden, f.allow_comments, f.allow_download, f.view_count, f.download_count, f.share_count, f.like_count,
   f.comment_count, f.save_count, f.created_at, f.updated_at, left(f.extracted_text, 420) AS text_head,
+  f.ai_meta, f.ai_meta_status,
   u.username AS a_username, u.full_name AS a_name, u.avatar_url AS a_avatar, u.avatar_color AS a_color,
   o.slug AS o_slug, o.name AS o_name, o.avatar_key AS o_avatar, o.verified AS o_verified, o.accent AS o_accent
 FROM files f JOIN users u ON u.id = f.user_id LEFT JOIN orgs o ON o.id = f.org_id"""
@@ -150,9 +151,31 @@ def org_verified(row: dict, slug_key="slug", flag_key="verified") -> bool:
     return bool(row.get(flag_key)) or (row.get(slug_key) or "").lower() in config.VERIFIED_ORGS
 
 
-def thumb_url(f: dict) -> Optional[str]:
+def thumb_url(f: dict, small: bool = False) -> Optional[str]:
     if f.get("thumb_key"):
-        return f"/thumb/{f['id']}.webp?v={f['version']}"
+        rev = f.get("thumb_rev") or 1
+        return f"/thumb/{f['id']}.webp?v={f['version']}-{rev}" + ("&s=1" if small and rev >= 2 else "")
+    return None
+
+
+def small_thumb_key(key: str) -> str:
+    return key[:-5] + "-s.webp" if key.endswith(".webp") else key + "-s"
+
+
+def _small_w(f: dict) -> Optional[int]:
+    w, h = f.get("thumb_w"), f.get("thumb_h")
+    if not (w and h) or (f.get("thumb_rev") or 1) < 2:
+        return None
+    return w if max(w, h) <= config.THUMB_SMALL_EDGE else round(w * config.THUMB_SMALL_EDGE / max(w, h))
+
+
+def thumb_frame(f: dict) -> Optional[float]:
+    """Aspect ratio (w/h) the card frame should reserve: 16:9 for slide decks, the real first-page shape for PDFs
+    (A4/letter portrait or landscape, 16:9 exports...), None = keep the default card frame (docx, images, ...)."""
+    if f["file_type"] in DECK_TYPES:
+        return round(16 / 9, 4)
+    if f["file_type"] == "pdf" and f.get("thumb_w") and f.get("thumb_h"):
+        return round(max(0.5, min(2.4, f["thumb_w"] / f["thumb_h"])), 4)
     return None
 
 
@@ -161,6 +184,8 @@ def card(f: dict, extra: dict | None = None) -> dict:
     c = {
         "id": f["id"], "title": title, "description": (f.get("description") or "")[:280],
         "type": f["file_type"], "visibility": f["visibility"], "thumb": thumb_url(f),
+        "thumb_s": thumb_url(f, small=True), "thumb_w": f.get("thumb_w"), "thumb_h": f.get("thumb_h"),
+        "thumb_sw": _small_w(f), "frame": thumb_frame(f),
         "thumb_status": f.get("thumb_status"),
         "text": snippet(f.get("text_head") or "", 300) if (f["file_type"] in TEXT_TYPES or not f.get("thumb_key")) else "",
         "pages": f.get("page_count"), "size": f.get("size_bytes") or 0,
@@ -174,6 +199,7 @@ def card(f: dict, extra: dict | None = None) -> dict:
                  "initials": initials(f["o_name"])} if f.get("o_slug") else None),
         "tags": list(f.get("tags") or [])[:6], "summary": f.get("ai_summary"),
         "hidden": f.get("hidden", False), "url": f.get("url") if f["file_type"] == "url" else None,
+        "ai_meta": bool(f.get("ai_meta")), "ai_pending": f.get("ai_meta_status") in ("pending", "running"),
     }
     if extra:
         c.update(extra)
@@ -332,26 +358,105 @@ def dec_cursor(cur: Optional[str]) -> list[str]:
         return []
 
 
-# ---------------------------------------------------------------- background processing
-def _process(file_id: int):
-    f = q1("SELECT id, file_type, storage_key, version, title, description, extracted_text, tags FROM files WHERE id=%s",
+# ---------------------------------------------------------------- AI titles & descriptions
+def default_title(original_name: str) -> str:
+    """The title the uploader gets when they don't type one (mirrors the upload UI)."""
+    return re.sub(r"\s+", " ", re.sub(r"[_-]+", " ", Path(original_name or "").stem)).strip()
+
+
+def is_default_title(title: Optional[str], original_name: Optional[str]) -> bool:
+    norm = lambda x: re.sub(r"\s+", " ", re.sub(r"[_-]+", " ", x or "")).strip().lower()  # noqa: E731
+    t = norm(title)
+    return not t or t == norm(default_title(original_name or "")) or t == norm(original_name)
+
+
+AI_MIN_TEXT = 40  # characters of extracted text needed to write a meaningful title
+
+
+def apply_ai_meta(c, file_id: int, res: dict, replace_title: bool = True, replace_desc: bool = True) -> bool:
+    """Write AI title/description, keeping the first originals so it's reversible. Returns True if anything changed."""
+    t = (res or {}).get("title") if replace_title else None
+    d = (res or {}).get("description") if replace_desc else None
+    if not t and not d:
+        c.execute("UPDATE files SET ai_meta_status='failed', ai_meta_at=now() WHERE id=%s AND ai_meta_status='running'", (file_id,))
+        return False
+    row = c.execute("""UPDATE files SET original_title = CASE WHEN ai_meta THEN original_title ELSE title END,
+                         original_description = CASE WHEN ai_meta THEN original_description ELSE description END,
+                         title = COALESCE(%s, title), description = COALESCE(%s, description),
+                         ai_meta = true, ai_meta_status = 'done', ai_meta_at = now()
+                       WHERE id=%s AND ai_meta_status='running' RETURNING title, description, tags, extracted_text""",
+                    (t[: config.MAX_TITLE_LENGTH] if t else None, d, file_id)).fetchone()
+    if not row:  # the uploader edited the title/description meanwhile: their words win
+        return False
+    index_text(c, file_id, row["title"], row["description"], row["extracted_text"] or "", list(row["tags"] or []))
+    return True
+
+
+def ai_enrich(file_id: int, want_meta: bool, replace_title: bool = True, replace_desc: bool = True,
+              apply_summary: Optional[bool] = None) -> str:
+    """One AI call -> summary + topics (+ title/description when want_meta). Returns the resulting ai_meta_status."""
+    f = q1("SELECT id, title, description, original_name, file_type, extracted_text, ai_meta_status FROM files WHERE id=%s",
            (file_id,))
     if not f:
+        return "missing"
+    apply_summary = config.AI_AUTO_TAG if apply_summary is None else apply_summary
+    text = (f["extracted_text"] or "").strip()
+    if want_meta and (f["file_type"] == "url" or len(text) < AI_MIN_TEXT):
+        want_meta = False
+        with tx() as c:
+            c.execute("UPDATE files SET ai_meta_status='skipped', ai_meta_at=now() WHERE id=%s AND ai_meta_status='running'", (file_id,))
+    if not ai.enabled() or not (want_meta or apply_summary):
+        if want_meta:  # leave it as a backfill candidate for when AI is configured
+            with tx() as c:
+                c.execute("UPDATE files SET ai_meta_status=NULL WHERE id=%s AND ai_meta_status IN ('pending','running')", (file_id,))
+        return "disabled"
+    try:
+        res = ai.analyze(f["title"], text, want_meta=want_meta, filename=f["original_name"] or "")
+    except Exception as e:
+        log.warning("ai failed for %s: %s", file_id, e)
+        res = None
+    with tx() as c:
+        if res and apply_summary and (res.get("summary") or res.get("topics")):
+            c.execute("UPDATE files SET ai_summary=COALESCE(%s, ai_summary) WHERE id=%s", (res.get("summary"), file_id))
+            if res.get("topics"):
+                set_topics(c, file_id, ai_topics=res["topics"], replace_user=False)
+        if not want_meta:
+            return "skipped"
+        if not res:
+            c.execute("""UPDATE files SET ai_meta_status='failed', ai_meta_attempts=ai_meta_attempts+1, ai_meta_at=now()
+                         WHERE id=%s AND ai_meta_status='running'""", (file_id,))
+            return "failed"
+        ok = apply_ai_meta(c, file_id, res, replace_title, replace_desc)
+        if not ok:
+            c.execute("UPDATE files SET ai_meta_attempts=ai_meta_attempts+1 WHERE id=%s AND ai_meta_status='failed'", (file_id,))
+        return "done" if ok else "failed"
+
+
+# ---------------------------------------------------------------- background processing
+def _process(file_id: int):
+    f = q1("""SELECT id, file_type, storage_key, version, title, description, original_name, extracted_text, tags, ai_meta_status
+              FROM files WHERE id=%s""", (file_id,))
+    if not f:
         return
+    # AI first (needs only the extracted text) so the title/description land within seconds of the upload
+    want_meta = f["ai_meta_status"] == "pending"
+    if want_meta or (ai.enabled() and config.AI_AUTO_TAG):
+        try:
+            if want_meta:
+                with tx() as c:
+                    c.execute("UPDATE files SET ai_meta_status='running', ai_meta_at=now() WHERE id=%s", (file_id,))
+            ai_enrich(file_id, want_meta, replace_title=is_default_title(f["title"], f["original_name"]),
+                      replace_desc=not (f["description"] or "").strip())
+        except Exception as e:
+            log.warning("ai enrich failed for %s: %s", file_id, e)
     st = store()
-    thumb_key, preview_key = None, None
     status = "none"
     try:
-        if config.THUMBNAILS and f["storage_key"] and (f["file_type"] in IMAGE_TYPES or f["file_type"] in ("pdf", "docx", "pptx", "xlsx", "xls")):
+        if config.THUMBNAILS and f["storage_key"] and (f["file_type"] in IMAGE_TYPES or f["file_type"] in THUMBABLE):
             path = st.local_path(f["storage_key"])
             if path:
-                data, pdf = make_thumbnail(Path(path), f["file_type"])
-                if data:
-                    thumb_key = f"thumbs/{f['id']}-v{f['version']}.webp"
-                    st.put_bytes(thumb_key, data, "image/webp")
-                    status = "ready"
-                else:
-                    status = "failed"
+                ts, pdf = make_thumbs(Path(path), f["file_type"])
+                status = "ready" if ts and save_thumbs(f, ts) else "failed"
                 if pdf and f["file_type"] != "pdf":
                     try:
                         from pypdf import PdfReader
@@ -367,17 +472,57 @@ def _process(file_id: int):
     except Exception as e:
         log.warning("thumbnail failed for %s: %s", file_id, e)
         status = "failed"
-    summary, ai_topics = None, []
-    if ai.enabled() and config.AI_AUTO_TAG:
-        try:
-            summary, ai_topics = ai.summarize_and_tag(f["title"], f["extracted_text"])
-        except Exception as e:
-            log.warning("ai failed: %s", e)
+    if status != "ready":
+        with tx() as c:
+            c.execute("UPDATE files SET thumb_status=%s WHERE id=%s", (status, file_id))
+
+
+THUMBABLE = {"pdf", "docx", "pptx", "xlsx", "xls"}
+
+
+def save_thumbs(f: dict, ts: dict) -> bool:
+    """Store the large + small WebP and the page dimensions; drop the image it replaces (keeps storage lean)."""
+    st = store()
+    key = f"thumbs/{f['id']}-v{f['version']}-r{THUMB_REV}.webp"
+    st.put_bytes(key, ts["large"], "image/webp")
+    st.put_bytes(small_thumb_key(key), ts["small"], "image/webp")
     with tx() as c:
-        c.execute("""UPDATE files SET thumb_key=COALESCE(%s,thumb_key), thumb_status=%s,
-                     ai_summary=COALESCE(%s, ai_summary) WHERE id=%s""", (thumb_key, status, summary, file_id))
-        if ai_topics:
-            set_topics(c, file_id, ai_topics=ai_topics, replace_user=False)
+        old = c.execute("SELECT thumb_key, thumb_rev FROM files WHERE id=%s FOR UPDATE", (f["id"],)).fetchone()
+        if not old:
+            return False
+        c.execute("""UPDATE files SET thumb_key=%s, thumb_w=%s, thumb_h=%s, thumb_rev=%s, thumb_status='ready' WHERE id=%s""",
+                  (key, ts["w"], ts["h"], THUMB_REV, f["id"]))
+    if old["thumb_key"] and old["thumb_key"] != key:
+        for k in {old["thumb_key"], small_thumb_key(old["thumb_key"])} if (old["thumb_rev"] or 1) >= 2 else {old["thumb_key"]}:
+            try:
+                st.delete(k)
+            except Exception:
+                pass
+    return True
+
+
+def regen_thumbs(file_id: int) -> str:
+    """Re-render one file's thumbnail at the current THUMB_REV. Office files reuse the stored preview PDF, so
+    LibreOffice only runs when that preview is missing. Returns 'done' | 'skipped' | 'failed'."""
+    f = q1("SELECT id, file_type, storage_key, version FROM files WHERE id=%s", (file_id,))
+    if not f or not f["storage_key"] or not (f["file_type"] in IMAGE_TYPES or f["file_type"] in THUMBABLE):
+        return "skipped"
+    st = store()
+    path = st.local_path(f["storage_key"])
+    if not path:
+        return "failed"
+    preview = None
+    if f["file_type"] in THUMBABLE and f["file_type"] != "pdf":
+        preview = st.local_path(f"previews/{f['id']}-v{f['version']}.pdf")
+    ts, pdf = make_thumbs(Path(path), f["file_type"], preview_pdf=Path(preview) if preview else None)
+    if pdf:
+        st.put_file(f"previews/{f['id']}-v{f['version']}.pdf", pdf, "application/pdf")
+        pdf.unlink(missing_ok=True)
+    if not ts:
+        with tx() as c:   # keep the old image, just stop retrying it
+            c.execute("UPDATE files SET thumb_rev=%s WHERE id=%s", (THUMB_REV, file_id))
+        return "failed"
+    return "done" if save_thumbs(f, ts) else "skipped"
 
 
 def queue_processing(file_id: int):
@@ -392,7 +537,11 @@ def _safe(file_id):
 
 
 def queue_pending():
-    for r in q("SELECT id FROM files WHERE thumb_status='pending' AND file_type<>'url' ORDER BY id DESC LIMIT 500"):
+    # uploads interrupted by a restart: put AI work back to 'pending' so _process picks it up again
+    from app.db import ex
+    ex("UPDATE files SET ai_meta_status='pending' WHERE ai_meta_status='running' AND (ai_meta_at IS NULL OR ai_meta_at < now() - interval '10 minutes')")
+    for r in q("""SELECT id FROM files WHERE (thumb_status='pending' AND file_type<>'url') OR ai_meta_status='pending'
+                  ORDER BY id DESC LIMIT 500"""):
         queue_processing(r["id"])
 
 

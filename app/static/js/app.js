@@ -113,7 +113,7 @@ document.addEventListener("mouseover", (e) => {
   const t = e.target.closest("[data-tip],[data-tip-r]");
   if (!t) return;
   const right = t.hasAttribute("data-tip-r");
-  if (right && innerWidth > 1024) return; // sidebar labels visible
+  if (right && innerWidth > 1024 && !document.documentElement.classList.contains("nav-collapsed")) return; // labels visible
   const text = t.dataset.tip || t.dataset.tipR; if (!text) return;
   tipEl && tipEl.remove();
   tipEl = document.createElement("div"); tipEl.className = "tip"; tipEl.textContent = text; document.body.appendChild(tipEl);
@@ -122,6 +122,16 @@ document.addEventListener("mouseover", (e) => {
   else { tipEl.style.left = Math.max(6, Math.min(innerWidth - tipEl.offsetWidth - 6, r.left + r.width / 2 - tipEl.offsetWidth / 2)) + "px"; tipEl.style.top = r.top - tipEl.offsetHeight - 8 + "px"; }
   t.addEventListener("mouseleave", () => { tipEl && tipEl.remove(); tipEl = null; }, { once: true });
 });
+
+/* desktop nav collapse (same panel-left toggle as Crede); state persists in localStorage */
+function setNav(collapsed) {
+  document.documentElement.classList.toggle("nav-collapsed", collapsed);
+  try { localStorage.setItem("teams-sidebar-collapsed", String(collapsed)); } catch (e) {}
+  $$("[data-act=nav-toggle]").forEach((b) => { b.setAttribute("aria-expanded", String(!collapsed)); b.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar"); b.dataset.tipR = collapsed ? "Expand" : "Collapse"; });
+  tipEl && tipEl.remove(); tipEl = null;
+}
+document.addEventListener("click", (e) => { if (e.target.closest("[data-act=nav-toggle]")) setNav(!document.documentElement.classList.contains("nav-collapsed")); });
+setNav(document.documentElement.classList.contains("nav-collapsed"));
 
 /* theme */
 function setTheme(t, persist = true) {
@@ -139,11 +149,23 @@ const keep = (c) => { STORE.set(c.id, Object.assign(STORE.get(c.id) || {}, c)); 
 const fileUrl = (c, src) => `/f/${c.id}` + (src ? `?src=${src}` : "");
 const visIcon = (v) => v && v !== "public" ? `<span class="vis" data-tip="${VIS[v][1]}">${ic(VIS[v][0], "sm")}</span>` : "";
 
+/* sharp thumbnails: small + card-size WebP picked by the browser for the slot width x DPR (never CSS-upscaled) */
+function imgSrc(c, sizes, k = "") {
+  if (!c.thumb_w || !c.thumb_sw || c.thumb_sw >= c.thumb_w) return `src="${c.thumb}${k}"`;
+  return `src="${c.thumb}${k}" srcset="${c.thumb_s}${k} ${c.thumb_sw}w, ${c.thumb}${k} ${c.thumb_w}w" sizes="${sizes}"`;
+}
+const smallThumb = (c) => c.thumb_s || c.thumb;
+/* card frame: 16:9 for slide decks, the real page-1 shape for PDFs, default 4:3 crop for everything else */
+function frameAttr(c) {
+  if (!c.frame) return "";
+  return ` style="--fr:${c.frame}" data-frame="${c.frame >= 1.25 ? "wide" : c.frame <= 0.9 ? "tall" : "square"}"`;
+}
+
 function thumbHtml(c, src, { tag = "a" } = {}) {
   const ft = `<span class="ft">${FT_LABEL[c.type] || c.type.toUpperCase()}</span>`;
   const pg = c.pages ? `<span class="pg">${ic("file", "sm")}${c.pages}</span>` : "";
   const k = c.visibility === "link" && c.k ? `&k=${c.k}` : "";
-  if (c.thumb) return `<${tag} class="thumb" href="${fileUrl(c, src)}" data-open="${c.id}"><img src="${c.thumb}${k}" alt="" loading="lazy" onload="this.classList.add('ok')" onerror="this.closest('.thumb').classList.add('placeholder');this.remove()">${ft}${pg}</${tag}>`;
+  if (c.thumb) return `<${tag} class="thumb${c.frame ? " framed" : ""}"${frameAttr(c)} href="${fileUrl(c, src)}" data-open="${c.id}"><img ${imgSrc(c, "(max-width: 720px) calc(100vw - 30px), 610px", k)}${c.thumb_w ? ` width="${c.thumb_w}" height="${c.thumb_h}"` : ""} alt="" loading="lazy" decoding="async" onload="this.classList.add('ok')" onerror="this.closest('.thumb').classList.add('placeholder');this.remove()">${ft}${pg}</${tag}>`;
   if (c.type === "url") return `<a class="thumb placeholder" href="${fileUrl(c, src)}"><div class="col" style="align-items:center;gap:8px;padding:0 20px;text-align:center"><div class="ft-tile ft-url">${ic("link", "lg")}</div><span class="muted clamp-1" style="font-size:13px">${esc((c.url || "").replace(/^https?:\/\//, ""))}</span></div></a>`;
   if (c.text) return `<${tag} class="thumb text" href="${fileUrl(c, src)}" data-open="${c.id}">${esc(c.text)}</${tag}>`;
   if (c.thumb_status === "pending") return `<${tag} class="thumb placeholder" href="${fileUrl(c, src)}" data-open="${c.id}"><div class="ft-tile ft-${c.type}">${FT_LABEL[c.type] || ""}</div><div class="shimmer"></div></${tag}>`;
@@ -186,7 +208,7 @@ function feedCard(c, src = "feed") {
 
 function tile(c, { select = false, src = "library", extra = "" } = {}) {
   keep(c);
-  const img = c.thumb ? `<img src="${c.thumb}" alt="" loading="lazy" onerror="this.remove()">` : c.text ? `<div class="ph" style="padding:12px;font-size:11px;line-height:1.5;color:var(--muted);white-space:pre-line;overflow:hidden;place-items:start;font-family:ui-monospace,monospace">${esc(c.text.slice(0, 220))}</div>` : `<div class="ph"><div class="ft-tile ft-${c.type}" style="transform:scale(.8)">${FT_LABEL[c.type] || ic("link")}</div></div>`;
+  const img = c.thumb ? `<img ${imgSrc(c, "(max-width: 720px) 50vw, 240px")} alt="" loading="lazy" decoding="async" onerror="this.remove()">` : c.text ? `<div class="ph" style="padding:12px;font-size:11px;line-height:1.5;color:var(--muted);white-space:pre-line;overflow:hidden;place-items:start;font-family:ui-monospace,monospace">${esc(c.text.slice(0, 220))}</div>` : `<div class="ph"><div class="ft-tile ft-${c.type}" style="transform:scale(.8)">${FT_LABEL[c.type] || ic("link")}</div></div>`;
   return `<div class="tile" data-tile="${c.id}">
     ${select ? `<input type="checkbox" class="check sel" data-pick="${c.id}" aria-label="Select">` : ""}
     ${c.visibility !== "public" ? `<span class="badge vis-badge" data-tip="${VIS[c.visibility][1]}">${ic(VIS[c.visibility][0], "sm")}</span>` : ""}
@@ -205,7 +227,7 @@ function rankRow(it, kind, i) {
   if (kind === "topics") return `<a class="list-row" href="/t/${esc(it.slug)}">${rk}<span class="mini-thumb" style="background:var(--disc-soft);color:var(--disc-ink)">${ic("hash")}</span><div class="grow"><b>${esc(it.name)}</b><div class="muted" style="font-size:13px">${plural(it.files, "document")}</div></div>${ic("chev-r")}</a>`;
   keep(it);
   const metric = kind === "downloads" ? `<div class="metric">${num(it.metric)}<div class="muted" style="font-size:11px;font-weight:500;text-align:right">downloads</div></div>` : `<div class="metric" style="color:var(--stats-ink)">${ic("flame", "sm")}</div>`;
-  return `<a class="list-row" href="${fileUrl(it, "top")}">${rk}<span class="mini-thumb">${it.thumb ? `<img src="${it.thumb}" alt="" loading="lazy">` : `<b style="font-size:10px;color:var(--files)">${FT_LABEL[it.type] || ""}</b>`}</span><div class="grow"><b class="clamp-1">${esc(it.title)}</b><div class="muted clamp-1" style="font-size:13px">${esc(it.author.name)}${it.org ? " · " + esc(it.org.name) : ""} · ${num(it.counts.like)} likes</div></div>${metric}</a>`;
+  return `<a class="list-row" href="${fileUrl(it, "top")}">${rk}<span class="mini-thumb">${it.thumb ? `<img src="${smallThumb(it)}" alt="" loading="lazy">` : `<b style="font-size:10px;color:var(--files)">${FT_LABEL[it.type] || ""}</b>`}</span><div class="grow"><b class="clamp-1">${esc(it.title)}</b><div class="muted clamp-1" style="font-size:13px">${esc(it.author.name)}${it.org ? " · " + esc(it.org.name) : ""} · ${num(it.counts.like)} likes</div></div>${metric}</a>`;
 }
 
 function skeletonCards(n = 3) {
@@ -449,8 +471,10 @@ function pageSrc(c, n = 1, w = 700) {
 }
 const hasPages = (c) => ["pdf", "docx", "pptx", "xlsx", "xls", "doc"].includes(c.type) && c.thumb;
 function slideHtml(c) {
-  const bg = c.thumb ? `<div class="bgblur" style="background-image:url('${c.thumb}')"></div>` : "";
-  const doc = c.thumb ? `<div class="doc"><img src="${hasPages(c) ? pageSrc(c) : c.thumb}" alt="" ${hasPages(c) ? `onerror="this.onerror=null;this.src='${c.thumb}'"` : ""}></div>`
+  const bg = c.thumb ? `<div class="bgblur" style="background-image:url('${smallThumb(c)}')"></div>` : "";
+  // full-screen viewer: page 1 at 700/1100/1600px wide, chosen for the phone's width x DPR
+  const pgs = hasPages(c) ? `src="${pageSrc(c, 1, 1100)}" srcset="${pageSrc(c, 1, 700)} 700w, ${pageSrc(c, 1, 1100)} 1100w, ${pageSrc(c, 1, 1600)} 1600w" sizes="100vw"` : "";
+  const doc = c.thumb ? `<div class="doc"><img ${hasPages(c) ? pgs : `src="${c.thumb}"`} alt="" ${hasPages(c) ? `onerror="this.onerror=null;this.removeAttribute('srcset');this.src='${c.thumb}'"` : ""}></div>`
     : `<div class="doc text">${esc(c.text || c.description || c.title)}</div>`;
   const a = c.author;
   return `<section class="slide" data-slide="${c.id}">${bg}${doc}
@@ -609,6 +633,32 @@ PAGES.home = async (d) => {
 };
 
 /* ---------------- file page ---------------- */
+// description + AI summary + topics: re-rendered in place when an AI title/description lands
+const fileAiText = (c) => `${c.ai_pending ? `<div class="ai-chip" data-aichip><span class="spinner xs"></span>Writing title &amp; description…</div>` : ""}
+  ${c.description ? `<p class="about file-desc">${esc(c.description)}</p>` : ""}
+  ${c.summary ? `<div class="notice info file-summary">${ic("sparkle", "sm")}<span><b>Summary.</b> ${esc(c.summary)}</span></div>` : ""}
+  ${c.topics.length ? `<div class="row wrap file-topics">${c.topics.map((t) => `<a class="chip topic" href="/t/${esc(t.slug)}">#${esc(t.name)}</a>`).join("")}</div>` : ""}`;
+
+// Poll while the server writes the AI title/description (a few seconds after upload), then update the page live.
+function watchAiMeta(c) {
+  if (!c.ai_pending) return;
+  let tries = 0;
+  const tick = async () => {
+    if (BOOT.page !== "file" || !document.querySelector(`[data-ftitle]`)) return;
+    let d; try { d = await GET(`/api/files/${c.id}${c.k ? "?k=" + encodeURIComponent(c.k) : ""}`); } catch (e) { d = null; }
+    if (d && !d.ai_pending) {
+      Object.assign(c, { title: d.title, description: d.description, summary: d.summary, topics: d.topics, ai_pending: false });
+      const h = $("[data-ftitle]", V); if (h && h.textContent !== d.title) { h.textContent = d.title; h.classList.add("ai-fresh"); }
+      const box = $("[data-aitext]", V); if (box) { box.innerHTML = fileAiText(c); box.classList.add("ai-fresh"); }
+      document.title = `${d.title} · Teams`;
+      return;
+    }
+    if (++tries < 40) setTimeout(tick, Math.min(6000, 1500 + tries * 250));
+    else { const ch = $("[data-aichip]", V); ch && ch.remove(); }
+  };
+  setTimeout(tick, 1500);
+}
+
 PAGES.file = async (c) => {
   c.k = c.visibility === "link" ? (KEY || (c.link.split("k=")[1] || "")) : "";
   keep(c);
@@ -631,27 +681,25 @@ PAGES.file = async (c) => {
       <div data-related></div>
     </div>
     <aside class="side-sticky">
-      <div class="panel"><div class="panel-b" style="padding-top:18px">
-        <div class="row" style="gap:10px;margin-bottom:14px"><a href="/u/${esc(a.username)}">${avatar(a, "md")}</a><div class="grow" style="line-height:1.25"><a href="/u/${esc(a.username)}"><b>${esc(a.name)}</b></a><div class="muted" style="font-size:13px">@${esc(a.username)} · ${esc(c.ago)}</div></div>
+      <div class="panel file-side"><div class="panel-b">
+        <div class="row file-author"><a href="/u/${esc(a.username)}">${avatar(a, "md")}</a><div class="grow" style="line-height:1.25"><a href="/u/${esc(a.username)}"><b>${esc(a.name)}</b></a><div class="muted" style="font-size:13px">@${esc(a.username)} · ${esc(c.ago)}</div></div>
           ${c.mine ? `<button class="iconbtn" data-more="${c.id}">${ic("more")}</button>` : followBtn("user", a.username, false, "sm")}</div>
-        <h1 style="font-size:22px">${esc(c.title)}</h1>
+        <h1 class="file-title" data-ftitle>${esc(c.title)}</h1>
         ${c.org ? `<a class="org-link" style="margin-top:8px;display:inline-flex" href="/o/${esc(c.org.slug)}">${avatar(c.org, "xs", true)} ${esc(c.org.name)}${verified(c.org.verified)}</a>` : ""}
-        ${c.description ? `<p class="about" style="margin:12px 0 0">${esc(c.description)}</p>` : ""}
-        ${c.summary ? `<div class="notice info" style="margin-top:12px">${ic("sparkle", "sm")}<span><b>Summary.</b> ${esc(c.summary)}</span></div>` : ""}
-        ${c.topics.length ? `<div class="row wrap" style="gap:6px;margin-top:14px">${c.topics.map((t) => `<a class="chip topic" href="/t/${esc(t.slug)}">#${esc(t.name)}</a>`).join("")}</div>` : ""}
-        <div class="big-actions" style="margin-top:16px">
-          <button class="act like ${c.liked ? "on" : ""}" data-like="${c.id}">${ic("heart")}<span class="n">${num(c.counts.like)}</span></button>
-          <button class="act save ${c.saved ? "on" : ""}" data-save="${c.id}">${ic("bookmark")}<span class="n">${num(c.counts.save)}</span></button>
-          <button class="act" data-share="${c.id}">${ic("send")}<span class="n">${num(c.counts.share)}</span></button>
-          <button class="act" data-more="${c.id}">${ic("more")}<span>More</span></button>
+        <div data-aitext>${fileAiText(c)}</div>
+        <div class="big-actions">
+          <button class="act like ${c.liked ? "on" : ""}" data-like="${c.id}" aria-label="Like">${ic("heart")}<span class="cap"><span class="n">${num(c.counts.like)}</span><span class="lab" data-l="Like" data-on="Liked" aria-hidden="true"></span></span></button>
+          <button class="act save ${c.saved ? "on" : ""}" data-save="${c.id}" aria-label="Save">${ic("bookmark")}<span class="cap"><span class="n">${num(c.counts.save)}</span><span class="lab" data-l="Save" data-on="Saved" aria-hidden="true"></span></span></button>
+          <button class="act" data-share="${c.id}" aria-label="Share">${ic("send")}<span class="cap"><span class="n">${num(c.counts.share)}</span><span class="lab" data-l="Share" aria-hidden="true"></span></span></button>
+          <button class="act" data-more="${c.id}" aria-label="More">${ic("more")}<span>More</span></button>
         </div>
-        ${c.allow_download ? `<a class="btn primary lg block" style="margin-top:12px" href="${dl}" data-dl>${ic("download")}${c.type === "url" ? "Open link" : "Download"}</a>` : `<div class="notice" style="margin-top:12px">${ic("lock", "sm")}Downloads are turned off for this file</div>`}
-        <dl class="meta-list" style="margin-top:16px">
+        ${c.allow_download ? `<a class="btn primary lg block file-dl" href="${dl}" data-dl>${ic("download")}${c.type === "url" ? "Open link" : "Download"}</a>` : `<div class="notice file-dl">${ic("lock", "sm")}Downloads are turned off for this file</div>`}
+        <dl class="meta-list file-meta">
           <dt>Views</dt><dd class="tnum">${num(c.counts.view)}</dd><dt>Downloads</dt><dd class="tnum">${num(c.counts.download)}</dd>
           <dt>Visibility</dt><dd><span class="row" style="justify-content:flex-end;gap:4px">${ic(VIS[c.visibility][0], "sm")}${VIS[c.visibility][1]}</span></dd>
           ${c.version > 1 ? `<dt>Version</dt><dd>v${c.version}</dd>` : ""}
         </dl>
-        ${c.mine ? `<div class="row" style="margin-top:14px"><button class="btn sm grow" data-edit>${ic("edit", "sm")}Edit</button><a class="btn sm grow" href="/analytics?scope=file:${c.id}">${ic("chart", "sm")}Stats</a><button class="btn sm grow" data-version>${ic("history", "sm")}New version</button></div>` : ""}
+        ${c.mine ? `<div class="row file-owner"><button class="btn sm grow" data-edit>${ic("edit", "sm")}Edit</button><a class="btn sm grow" href="/analytics?scope=file:${c.id}">${ic("chart", "sm")}Stats</a><button class="btn sm grow" data-version>${ic("history", "sm")}New version</button></div>` : ""}
       </div></div>
       ${c.featured_in.length ? `<div class="panel"><div class="panel-h">Featured in</div><div class="panel-b">${c.featured_in.map((o) => `<a class="list-row" href="/o/${esc(o.slug)}"><span class="av sm org" style="--c:var(--orgs)">${esc(o.name[0])}</span><b class="grow">${esc(o.name)}</b>${o.status !== "approved" ? `<span class="badge stats">${esc(o.status)}</span>` : ""}</a>`).join("")}</div></div>` : ""}
       ${c.is_owner && c.collaborators.length ? `<div class="panel"><div class="panel-h">Collaborators</div><div class="panel-b">${c.collaborators.map((x) => `<div class="list-row">${avatar({ name: x.name || x.email, initials: (x.name || x.email || "?")[0].toUpperCase() }, "sm")}<div class="grow"><b>${esc(x.name || x.email)}</b>${x.registered ? "" : `<div class="muted" style="font-size:12px">Invited — not on Teams yet</div>`}</div></div>`).join("")}</div></div>` : ""}
@@ -661,7 +709,8 @@ PAGES.file = async (c) => {
   // viewer
   const vw = $("[data-viewer]", V);
   if (hasPages(c) && c.pages) {
-    vw.innerHTML = `<div class="pages">${Array.from({ length: Math.min(c.pages, 300) }, (_, i) => `<div class="page-img" data-n="${i + 1}"><span class="no">${i + 1}</span></div>`).join("")}</div>`;
+    const ar0 = c.thumb_w && c.thumb_h ? ` style="--ar:${(c.thumb_w / c.thumb_h).toFixed(4)}"` : "";
+    vw.innerHTML = `<div class="pages">${Array.from({ length: Math.min(c.pages, 300) }, (_, i) => `<div class="page-img" data-n="${i + 1}"${ar0}><span class="no">${i + 1}</span></div>`).join("")}</div>`;
     const w = Math.min(1600, Math.ceil(vw.clientWidth * (devicePixelRatio || 1) / 100) * 100);
     const io = new IntersectionObserver((es) => es.forEach((e) => {
       if (!e.isIntersecting) return; io.unobserve(e.target);
@@ -691,6 +740,7 @@ PAGES.file = async (c) => {
   const fsb = $("[data-fs]", V);
   if (fsb) fsb.onclick = () => { const p = $(".pages", vw); (p.requestFullscreen || p.webkitRequestFullscreen || (() => {})).call(p); };
 
+  watchAiMeta(c);
   POST(`/api/files/${c.id}/view`, { src: SRC || (document.referrer && new URL(document.referrer).host === location.host ? "direct" : (document.referrer ? "external" : "direct")), k: c.k || null }).catch(() => {});
   if ($("[data-edit]", V)) $("[data-edit]", V).onclick = () => editSheet(c.id);
   if ($("[data-version]", V)) $("[data-version]", V).onclick = () => versionSheet(c);
@@ -814,7 +864,7 @@ PAGES.search = async (d) => {
     if (type === "people") h += first.people.map(peopleRow).join("") || empty("users", "No people found", `Nobody matches “${esc(q)}”.`);
     if (type === "orgs") h += first.orgs.map(orgRow).join("") || empty("building", "No organizations found", `Nothing matches “${esc(q)}”.`);
     if (type === "topics") h += `<div class="row wrap" style="gap:8px">${first.topics.map(topicRow).join("")}</div>` + (first.topics.length ? "" : empty("hash", "No topics found", ""));
-    if (type === "all" || type === "files") h += `<div class="row between" style="margin:4px 0 10px"><div class="section-title" style="margin:0">Documents</div><select class="select sm" data-ftype style="width:auto">${[["", "Any type"], ["pdf", "PDF"], ["docx", "Word"], ["pptx", "PowerPoint"], ["xlsx", "Excel"], ["image", "Images"], ["txt", "Text"], ["url", "Links"]].map(([k, l]) => `<option value="${k}" ${k === ftype ? "selected" : ""}>${l}</option>`).join("")}</select></div><div data-files></div>`;
+    if (type === "all" || type === "files") h += `<div class="row between" style="margin:4px 0 10px"><div class="section-title" style="margin:0">Documents</div><select class="select sm" data-ftype style="width:auto">${[["", "Any type"], ["pdf", "PDF"], ["docx", "Word"], ["pptx", "PowerPoint"], ["xlsx", "Excel"], ["image", "Images"], ["txt", "Text"], ["url", "Links"]].map(([k, l]) => `<option value="${k}" ${k === ftype ? "selected" : ""}>${l}</option>`).join("")}</select></div><div data-files class="card-grid"></div>`;
     res.innerHTML = h;
     if (type === "all" || type === "files") {
       $("[data-ftype]", res).onchange = (e) => { ftype = e.target.value; run(); };
@@ -1027,7 +1077,7 @@ async function curateTab(o, el) {
   const [req, cand] = await Promise.all([GET(`/api/orgs/${o.slug}/requests`), GET(`/api/orgs/${o.slug}/candidates`)]);
   el.innerHTML = `<div class="notice info" style="margin-bottom:16px">${ic("shield")}<span><b>Curation by consent.</b> When you feature a member's document, its uploader gets a request and decides whether it appears in ${esc(o.name)}'s library.</span></div>
     <div class="section-title">Requests sent</div>
-    <div class="panel" style="margin-bottom:20px"><div class="panel-b">${req.items.map((c) => `<div class="list-row"><span class="mini-thumb">${c.thumb ? `<img src="${c.thumb}">` : ""}</span><div class="grow"><a href="/f/${c.id}"><b class="clamp-1">${esc(c.title)}</b></a><div class="muted" style="font-size:13px">by ${esc(c.author.name)}</div></div><span class="badge ${c.feature_status === "pending" ? "stats" : "rose"}">${c.feature_status === "pending" ? "Awaiting approval" : "Declined"}</span></div>`).join("") || `<p class="muted" style="margin:6px 0">No open requests.</p>`}</div></div>
+    <div class="panel" style="margin-bottom:20px"><div class="panel-b">${req.items.map((c) => `<div class="list-row"><span class="mini-thumb">${c.thumb ? `<img src="${smallThumb(c)}">` : ""}</span><div class="grow"><a href="/f/${c.id}"><b class="clamp-1">${esc(c.title)}</b></a><div class="muted" style="font-size:13px">by ${esc(c.author.name)}</div></div><span class="badge ${c.feature_status === "pending" ? "stats" : "rose"}">${c.feature_status === "pending" ? "Awaiting approval" : "Declined"}</span></div>`).join("") || `<p class="muted" style="margin:6px 0">No open requests.</p>`}</div></div>
     <div class="section-title">Members' documents you can feature</div>
     ${cand.items.length ? `<div class="grid">${cand.items.map((c) => tile(c, { src: "org", extra: `<button class="btn sm green" data-feature="${c.id}" style="margin:2px 0 6px">${ic("star", "sm")}${c.mine ? "Feature" : "Request feature"}</button>` })).join("")}</div>` : empty("star", "Nothing to feature", "When members share public documents, they show up here.")}`;
   el.onclick = async (e) => {
@@ -1194,7 +1244,8 @@ PAGES.upload = async () => {
     <div class="row" style="margin:12px 0"><div class="divider grow"><span>or share a link</span></div></div>
     <div class="row"><input class="input grow" data-url placeholder="https://…"><button class="btn" data-addurl>${ic("link", "sm")}Add link</button></div>
     <div class="panel" style="margin-top:18px"><div class="panel-h">Details for all files <span class="muted" style="font-weight:500;font-size:12.5px">Applied to every file in the queue — edit titles individually below</span></div><div class="panel-b">
-      <div class="field"><label>Description</label><textarea class="textarea" data-desc rows="2" placeholder="What are these documents about?"></textarea></div>
+      ${BOOT.ai_enabled ? `<label class="ai-toggle" data-aimeta-row><span class="ai-ic">${ic("sparkle", "sm")}</span><span class="grow"><b>AI title &amp; description</b><span class="muted" data-aimeta-hint></span></span><input type="checkbox" class="sr" data-aimeta><span class="switch"></span></label>` : ""}
+      <div class="field" data-desc-field><label>Description</label><textarea class="textarea" data-desc rows="2" placeholder="What are these documents about?"></textarea></div>
       <div class="field"><label>Tags</label><input class="input" data-tags placeholder="e.g. safety, training"><span class="hint">Tags become topics people can follow and browse.</span></div>
       <div class="row gap-12 wrap"><div class="field grow"><label>Who can see them</label><select class="select" data-vis>${visOptions("public")}</select></div>
         <div class="field grow"><label>Post as organization</label><select class="select" data-org>${orgOptions(presetOrg)}</select></div></div>
@@ -1204,12 +1255,29 @@ PAGES.upload = async () => {
     <div data-q style="margin-top:18px"></div>
     <div class="row upload-go hide" data-go-row><span class="muted grow" data-qsum></span><button class="btn" data-clear>Clear</button><button class="btn primary lg" data-go>${ic("upload", "sm")}Upload all</button></div></div>`;
   const qEl = $("[data-q]", V), input = $("[data-input]", V), drop = $("[data-drop]", V);
+  // AI title & description: on by default, remembered for this browser session only (switch it off per upload session)
+  const aiBox = $("[data-aimeta]", V);
+  const aiOn = () => !!(aiBox && aiBox.checked);
+  if (aiBox) {
+    const saved = sessionStorage.getItem("teams.aimeta");
+    aiBox.checked = saved === null ? BOOT.ai_meta_default !== false : saved === "1";
+    const sync = () => {
+      $("[data-aimeta-hint]", V).textContent = aiOn() ? "Written from each file's contents as it uploads. You can edit them anytime." : "Off for this session. Titles come from file names.";
+      $("[data-aimeta-row]", V).classList.toggle("on", aiOn());
+      $("[data-desc-field] textarea", V).placeholder = aiOn() ? "Optional. Leave empty and AI writes one per file" : "What are these documents about?";
+      queue.forEach((q) => { if (q.state === "ready" && !q.edited) q.auto = aiOn(); });
+      render();
+    };
+    aiBox.onchange = () => { sessionStorage.setItem("teams.aimeta", aiOn() ? "1" : "0"); sync(); };
+    setTimeout(sync);
+  }
   const visSel = $("[data-vis]", V), orgSel = $("[data-org]", V);
   const syncVis = () => { const o = visSel.querySelector('option[value="org"]'); o.disabled = !orgSel.value; if (!orgSel.value && visSel.value === "org") visSel.value = "public"; };
   orgSel.onchange = syncVis; syncVis();
   const icFor = (q) => q.url ? "link" : /image/.test(q.file.type) ? "image" : "file";
+  const aiTag = (q) => !q.url && aiOn() && !q.edited ? (q.state === "done" && q.aiDone ? `<span class="ai-badge" data-tip="Title by AI">${ic("sparkle", "sm")}AI</span>` : q.state !== "error" ? `<span class="ai-badge soft" data-tip="AI will title this file from its contents">${ic("sparkle", "sm")}${q.state === "done" ? "Writing…" : "Auto"}</span>` : "") : "";
   const row = (q) => `<div class="q-item" data-qi="${q.id}"><span class="mini-thumb ft-${q.ext}">${q.preview ? `<img src="${q.preview}">` : ic(icFor(q))}</span>
-    <div class="grow" style="min-width:0"><input class="q-title" value="${esc(q.title)}" ${q.state !== "ready" ? "disabled" : ""} aria-label="Title"><div class="muted" style="font-size:12px" data-st>${q.url ? esc(q.url) : bytes(q.file.size)}</div><div class="progress"><i style="width:${q.pct}%"></i></div></div>
+    <div class="grow" style="min-width:0"><div class="row" style="gap:6px"><input class="q-title grow" value="${esc(q.title)}" ${q.state !== "ready" ? "disabled" : ""} aria-label="Title">${aiTag(q)}</div><div class="muted" style="font-size:12px" data-st>${q.url ? esc(q.url) : bytes(q.file.size)}</div><div class="progress"><i style="width:${q.pct}%"></i></div></div>
     ${q.state === "ready" ? `<button class="iconbtn" data-rm data-tip="Remove">${ic("x")}</button>` : q.state === "done" ? `<a class="iconbtn ok" href="/f/${q.fileId}" data-tip="Open">${ic("check")}</a>` : q.state === "error" ? `<button class="iconbtn" data-retry data-tip="Retry">${ic("history")}</button>` : `<span class="spinner sm"></span>`}</div>`;
   const render = () => {
     qEl.innerHTML = queue.map(row).join("");
@@ -1234,7 +1302,16 @@ PAGES.upload = async () => {
   drop.addEventListener("drop", (e) => add(e.dataTransfer.files));
   document.addEventListener("paste", (e) => { if (BOOT.page === "upload" && e.clipboardData.files.length) add(e.clipboardData.files); });
   $("[data-addurl]", V).onclick = () => { const u = $("[data-url]", V).value.trim(); if (!u) return; queue.push({ id: ++seq, url: u, title: u.replace(/^https?:\/\//, "").slice(0, 120), ext: "url", state: "ready", pct: 0 }); $("[data-url]", V).value = ""; render(); };
-  qEl.addEventListener("input", (e) => { const t = e.target.closest(".q-title"); if (t) queue.find((q) => q.id === +t.closest("[data-qi]").dataset.qi).title = t.value; });
+  qEl.addEventListener("input", (e) => { const t = e.target.closest(".q-title"); if (t) { const q = queue.find((x) => x.id === +t.closest("[data-qi]").dataset.qi); q.title = t.value; q.edited = true; } });
+  // after upload, show the AI title in the queue as soon as it's written
+  const watchQ = (q, n = 0) => {
+    if (!aiOn() || q.url || q.edited) return;
+    setTimeout(async () => {
+      let d; try { d = await GET(`/api/files/${q.fileId}`); } catch (e) { return; }
+      if (d.ai_pending && n < 30) return watchQ(q, n + 1);
+      q.title = d.title; q.aiDone = !!d.ai_meta; render();
+    }, n ? 2500 : 1500);
+  };
   qEl.addEventListener("click", (e) => {
     const it = e.target.closest("[data-qi]"); if (!it) return; const q = queue.find((x) => x.id === +it.dataset.qi);
     if (e.target.closest("[data-rm]")) { queue.splice(queue.indexOf(q), 1); render(); }
@@ -1247,12 +1324,13 @@ PAGES.upload = async () => {
     fd.append("title", q.title); fd.append("description", $("[data-desc]", V).value); fd.append("tags", $("[data-tags]", V).value);
     fd.append("visibility", visSel.value); fd.append("org", orgSel.value); fd.append("collaborators", $("[data-collab]", V).value);
     fd.append("allow_comments", $("[data-ac]", V).checked); fd.append("allow_download", $("[data-ad]", V).checked);
+    if (aiBox) fd.append("ai_meta", aiOn());  // server keeps any title the user typed and fills only what is empty
     const x = new XMLHttpRequest(); x.open("POST", "/api/files");
     const el = () => $(`[data-qi="${q.id}"]`, qEl);
     x.upload.onprogress = (e) => { if (!e.lengthComputable) return; q.pct = Math.round(e.loaded / e.total * 95); const r = el(); if (r) { $(".progress i", r).style.width = q.pct + "%"; $("[data-st]", r).textContent = q.pct >= 95 ? "Processing…" : `${q.pct}% · ${bytes(e.loaded)} of ${bytes(e.total)}`; } };
     x.onload = () => {
       let d = {}; try { d = JSON.parse(x.responseText); } catch (e) { /* */ }
-      if (x.status < 300) { q.state = "done"; q.pct = 100; q.fileId = d.file.id; }
+      if (x.status < 300) { q.state = "done"; q.pct = 100; q.fileId = d.file.id; watchQ(q); }
       else { q.state = "error"; q.err = typeof d.detail === "string" ? d.detail : "Upload failed"; }
       render(); if (q.state === "error") { const r = el(); r && ($("[data-st]", r).innerHTML = `<span style="color:var(--danger)">${esc(q.err)}</span>`); r && r.classList.add("err"); }
       res();
@@ -1330,7 +1408,7 @@ PAGES.analytics = async () => {
       </div>
       ${d.meta.kind !== "file" ? `<div class="panel" style="margin-top:16px"><div class="panel-h">Documents <span class="muted" style="font-weight:500;font-size:12.5px">in this period · tap to drill down</span></div><div style="overflow-x:auto"><table class="table">
         <thead><tr><th>Document</th><th class="r">Views</th><th class="r">Downloads</th><th class="r">Shares</th><th class="r hide-m">Likes</th><th class="r hide-m">Comments</th></tr></thead>
-        <tbody>${d.files.map((f) => `<tr data-file="${f.id}"><td><div class="row" style="gap:10px"><span class="mini-thumb sm">${f.thumb ? `<img src="${f.thumb}">` : ""}</span><span class="clamp-1">${esc(f.title)}</span>${f.visibility !== "public" ? ic(VIS[f.visibility][0], "sm") : ""}</div></td><td class="r tnum">${num(f.views)}</td><td class="r tnum">${num(f.downloads)}</td><td class="r tnum">${num(f.shares)}</td><td class="r tnum hide-m">${num(f.likes)}</td><td class="r tnum hide-m">${num(f.comments)}</td></tr>`).join("") || `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">No documents yet.</td></tr>`}</tbody></table></div></div>` : ""}`;
+        <tbody>${d.files.map((f) => `<tr data-file="${f.id}"><td><div class="row" style="gap:10px"><span class="mini-thumb sm">${f.thumb ? `<img src="${smallThumb(f)}">` : ""}</span><span class="clamp-1">${esc(f.title)}</span>${f.visibility !== "public" ? ic(VIS[f.visibility][0], "sm") : ""}</div></td><td class="r tnum">${num(f.views)}</td><td class="r tnum">${num(f.downloads)}</td><td class="r tnum">${num(f.shares)}</td><td class="r tnum hide-m">${num(f.likes)}</td><td class="r tnum hide-m">${num(f.comments)}</td></tr>`).join("") || `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">No documents yet.</td></tr>`}</tbody></table></div></div>` : ""}`;
     const sc = $("[data-scope]", root); if (sc) sc.onchange = () => { scope = sc.value; draw(); };
     $("[data-days]", root).onclick = (e) => { const b = e.target.closest("[data-d]"); if (b) { days = +b.dataset.d; draw(); } };
     $$("[data-series]", root).forEach((b) => b.onclick = () => { const k = b.dataset.series; if (active.has(k) && active.size > 1) active.delete(k); else active.add(k); b.classList.toggle("on", active.has(k)); $("[data-chart]", root).firstElementChild.outerHTML = chartSvg(d.labels, d.series, [...active]); bindChart(); });

@@ -442,7 +442,7 @@ def coll_out(r: dict) -> dict:
 
 COLL_SELECT = """SELECT cl.*, u.username, u.full_name, o.slug AS org_slug, o.name AS org_name,
   (SELECT count(*) FROM collection_items ci WHERE ci.collection_id=cl.id) AS n,
-  (SELECT array_agg('/thumb/' || x.id || '.webp?v=' || x.version) FROM (SELECT f.id, f.version FROM collection_items ci JOIN files f ON f.id=ci.file_id
+  (SELECT array_agg('/thumb/' || x.id || '.webp?v=' || x.version || '-' || x.thumb_rev || '&s=1') FROM (SELECT f.id, f.version, f.thumb_rev FROM collection_items ci JOIN files f ON f.id=ci.file_id
      WHERE ci.collection_id=cl.id AND f.thumb_key IS NOT NULL AND f.visibility='public' ORDER BY ci.position, ci.added_at LIMIT 3) x) AS covers
 FROM collections cl JOIN users u ON u.id=cl.user_id LEFT JOIN orgs o ON o.id=cl.org_id"""
 

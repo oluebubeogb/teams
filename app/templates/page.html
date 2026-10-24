@@ -26,6 +26,7 @@
 <link rel="apple-touch-icon" href="/static/img/icon-192.png">
 <link rel="preload" href="/static/fonts/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/css/app.css?v={{ asset_v }}">
+<script>(function(){try{if(localStorage.getItem("teams-sidebar-collapsed")==="true")document.documentElement.classList.add("nav-collapsed")}catch(e){}})()</script>
 <script>(function(){try{var t=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.dataset.theme=t}catch(e){}})()</script>
 </head>
 <body>
@@ -35,7 +36,10 @@
 {% else %}
 <div class="shell">
   <aside class="side">
-    <a class="brand" href="/"><span class="brand-mark"><svg class="icon" style="width:18px;height:18px;stroke-width:2.2"><use href="#i-layers"/></svg></span><span>Teams <small>by Collab</small></span></a>
+    <div class="side-head">
+      <a class="brand" href="/"><span class="brand-mark"><svg class="icon" style="width:18px;height:18px;stroke-width:2.2"><use href="#i-layers"/></svg></span><span>Teams <small>by Collab</small></span></a>
+      <button type="button" class="nav-toggle" data-act="nav-toggle" aria-label="Collapse sidebar" aria-expanded="true" data-tip-r="Collapse"><svg class="icon"><use href="#i-panel-left"/></svg></button>
+    </div>
     <nav class="nav">
       <a href="/" data-nav="home" data-tip-r="Home"><svg class="icon"><use href="#i-home"/></svg><span class="lbl">Home</span></a>
       <a href="/top" data-nav="top" data-tip-r="Top lists"><svg class="icon"><use href="#i-trophy"/></svg><span class="lbl">Top lists</span></a>
@@ -54,7 +58,7 @@
       {% if me %}
       <button class="me-chip" data-menu="me">
         <span class="av sm" style="--c:{{ me.color }}">{% if me.avatar %}<img src="{{ me.avatar }}" alt="">{% else %}{{ me.initials }}{% endif %}</span>
-        <span class="who grow" style="text-align:left;line-height:1.2"><b style="font-size:14px;font-weight:600" class="clamp-1">{{ me.name }}</b><span class="muted" style="font-size:12.5px">@{{ me.username }}</span></span>
+        <span class="who grow lbl-fade" style="text-align:left;line-height:1.2"><b style="font-size:14px;font-weight:600" class="clamp-1">{{ me.name }}</b><span class="muted" style="font-size:12.5px">@{{ me.username }}</span></span>
       </button>
       {% else %}
       <a class="btn primary block" href="/login"><span class="lbl">Sign in</span><svg class="icon sm"><use href="#i-chev-r"/></svg></a>

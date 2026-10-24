@@ -15,10 +15,10 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
-from app import config
+from app import config, docmeta
 from app.auth import get_current_user, get_user_by_email, require_user
-from app.core import (FILE_SELECT, VIS, can_edit, can_view, card, cards, file_or_404, get_file, has_role, index_text, notify,
-                      parse_tags, queue_processing, record_event, uid_of)
+from app.core import (FILE_SELECT, VIS, can_edit, can_view, card, cards, default_title, file_or_404, small_thumb_key, get_file, has_role,
+                      index_text, is_default_title, notify, parse_tags, queue_processing, record_event, uid_of)
 from app.db import q, q1, tx
 from app.extract import extract_text, office_to_pdf
 from app.storage import store
@@ -98,7 +98,10 @@ async def _save_upload(file: UploadFile) -> tuple[Path, str, str, int]:
 async def upload(request: Request, file: Optional[UploadFile] = File(None), url: Optional[str] = Form(None),
                  title: str = Form(""), description: str = Form(""), tags: str = Form(""),
                  visibility: str = Form("public"), org: str = Form(""), collaborators: str = Form(""),
-                 allow_comments: bool = Form(True), allow_download: bool = Form(True), user=Depends(require_user)):
+                 allow_comments: bool = Form(True), allow_download: bool = Form(True),
+                 ai_meta: Optional[bool] = Form(None), user=Depends(require_user)):
+    if ai_meta is None:
+        ai_meta = config.AI_META_DEFAULT
     if visibility not in ("public", "org", "private", "link"):
         raise HTTPException(400, "Bad visibility")
     org_id = resolve_org_for_post(org, user)
@@ -114,8 +117,8 @@ async def upload(request: Request, file: Optional[UploadFile] = File(None), url:
         t = (title or u).strip()[: config.MAX_TITLE_LENGTH]
         with tx() as c:
             fid = c.execute("""INSERT INTO files(user_id,org_id,visibility,filename,original_name,file_type,url,title,description,
-                               tags,extracted_text,thumb_status,allow_comments,allow_download)
-                               VALUES (%s,%s,%s,%s,%s,'url',%s,%s,%s,%s,%s,'none',%s,%s) RETURNING id""",
+                               tags,extracted_text,thumb_status,allow_comments,allow_download,ai_meta_status)
+                               VALUES (%s,%s,%s,%s,%s,'url',%s,%s,%s,%s,%s,'none',%s,%s,'skipped') RETURNING id""",
                             (user["id"], org_id, visibility, u[:200], u[:200], u, t, description, tag_list, u,
                              allow_comments, allow_download)).fetchone()["id"]
             set_collaborators(c, fid, collaborators, user)
@@ -131,13 +134,16 @@ async def upload(request: Request, file: Optional[UploadFile] = File(None), url:
         store().put_file(key, tmp, MIME.get(ftype, "application/octet-stream"))
     finally:
         tmp.unlink(missing_ok=True)
-    t = (title or Path(original).stem.replace("_", " ").replace("-", " ")).strip()[: config.MAX_TITLE_LENGTH]
+    t = (title or default_title(original) or "Untitled").strip()[: config.MAX_TITLE_LENGTH]
+    # AI title & description: only where the uploader left the filename title / an empty description
+    wants_ai = bool(ai_meta) and (is_default_title(t, original) or not description)
+    ai_status = "pending" if wants_ai else ("off" if not ai_meta else "skipped")
     with tx() as c:
         fid = c.execute("""INSERT INTO files(user_id,org_id,visibility,filename,original_name,file_type,storage_key,size_bytes,
-                           page_count,title,description,tags,extracted_text,allow_comments,allow_download)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                           page_count,title,description,tags,extracted_text,allow_comments,allow_download,ai_meta_status)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                         (user["id"], org_id, visibility, Path(key).name, original, ftype, key, size, pages, t, description,
-                         tag_list, text, allow_comments, allow_download)).fetchone()["id"]
+                         tag_list, text, allow_comments, allow_download, ai_status)).fetchone()["id"]
         c.execute("""INSERT INTO file_versions(file_id,version,storage_key,original_name,file_type,size_bytes,created_by,note)
                      VALUES (%s,1,%s,%s,%s,%s,%s,'Original upload')""", (fid, key, original, ftype, size, user["id"]))
         set_collaborators(c, fid, collaborators, user)
@@ -189,6 +195,9 @@ def apply_patch(c, f: dict, p: FilePatch, user: dict):
         v = getattr(p, k)
         if v is not None:
             sets.append(f"{k}=%s"); params.append(v)
+    if p.title is not None or p.description is not None:
+        # the uploader's own words win over AI (and stop a pending AI pass / future backfill from overwriting them)
+        sets.append("ai_meta_status='edited'")
     if sets:
         sets.append("updated_at=now()")
         c.execute(f"UPDATE files SET {', '.join(sets)} WHERE id=%s", (*params, f["id"]))
@@ -220,6 +229,7 @@ def detail(file_id: int, k: Optional[str] = None, user=Depends(get_current_user)
     c["allow_download"] = f["allow_download"] or owner
     c["original_name"] = f["original_name"]
     c["version"] = f["version"]
+    c["ai_meta_status"] = f.get("ai_meta_status") if owner else None
     c["link"] = f"{config.APP_URL}/f/{f['id']}" + (f"?k={f['link_token']}" if f["visibility"] == "link" else "")
     c["collaborators"] = [
         {"email": r["email"] if owner else None, "username": r["username"], "name": r["full_name"], "registered": bool(r["username"])}
@@ -270,7 +280,8 @@ def delete(file_id: int, user=Depends(require_user)):
 
 def _delete_files(ids: list[int]):
     keys = [r["storage_key"] for r in q("SELECT storage_key FROM file_versions WHERE file_id = ANY(%s)", (ids,)) if r["storage_key"]]
-    keys += [r["thumb_key"] for r in q("SELECT thumb_key FROM files WHERE id = ANY(%s)", (ids,)) if r["thumb_key"]]
+    for r in q("SELECT thumb_key, thumb_rev FROM files WHERE id = ANY(%s) AND thumb_key IS NOT NULL", (ids,)):
+        keys += [r["thumb_key"]] + ([small_thumb_key(r["thumb_key"])] if (r["thumb_rev"] or 1) >= 2 else [])
     with tx() as c:
         c.execute("DELETE FROM files WHERE id = ANY(%s)", (ids,))
     st = store()
@@ -279,8 +290,17 @@ def _delete_files(ids: list[int]):
 
 
 # ---------------------------------------------------------------- serving
-def _serve(key: str, filename: str, ftype: str, inline: bool):
+def _serve(key: str, filename: str, ftype: str, inline: bool, f: Optional[dict] = None, slot: str = ""):
     st = store()
+    if f is not None and config.META_STAMP and ftype in docmeta.STAMPABLE:
+        # Serve a copy carrying Teams metadata (title/author/subject/keywords). S3 objects are pulled into the local cache.
+        src = st.local_path(key)
+        if not src:
+            raise HTTPException(404, "File missing from storage")
+        path = docmeta.stamped(f, Path(src), ftype, slot)
+        return FileResponse(path, media_type=MIME.get(ftype, "application/octet-stream"), filename=filename,
+                            content_disposition_type="inline" if inline else "attachment",
+                            headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=300"})
     if st.kind == "s3":
         return RedirectResponse(st.presigned(key, filename, inline=inline), status_code=302)
     path = st.local_path(key)
@@ -316,7 +336,7 @@ def download(file_id: int, request: Request, k: Optional[str] = None, src: Optio
     else:
         key = q1("SELECT storage_key FROM files WHERE id=%s", (file_id,))["storage_key"]
     record_event(file_id, "download", request, user, src)
-    return _serve(key, _display_name(f, ftype), ftype, inline=False)
+    return _serve(key, _display_name(f, ftype), ftype, inline=False, f=f, slot=f"orig-v{v or f['version']}")
 
 
 def _pdf_key(f: dict, key: str) -> str:
@@ -349,7 +369,7 @@ def page_image(file_id: int, n: int, k: Optional[str] = None, w: int = 1100, use
     n = max(1, n)
     cache = Path(config.CACHE_DIR) / "pages"
     cache.mkdir(parents=True, exist_ok=True)
-    out = cache / f"{file_id}-v{f['version']}-{n}-{w}.webp"
+    out = cache / f"{file_id}-v{f['version']}-{n}-w{w}.webp"   # w = exact pixel width (srcset "w" descriptors)
     if not out.exists():
         key = q1("SELECT storage_key FROM files WHERE id=%s", (file_id,))["storage_key"]
         src = store().local_path(_pdf_key(f, key))
@@ -357,14 +377,15 @@ def page_image(file_id: int, n: int, k: Optional[str] = None, w: int = 1100, use
             raise HTTPException(404, "File missing")
         with tempfile.TemporaryDirectory(prefix="teams-page-") as tmp:
             base = Path(tmp) / "p"
-            subprocess.run(["pdftoppm", "-f", str(n), "-l", str(n), "-png", "-scale-to", str(w), "-singlefile", src, str(base)],
+            subprocess.run(["pdftoppm", "-f", str(n), "-l", str(n), "-png", "-scale-to-x", str(w), "-scale-to-y", "-1",
+                            "-singlefile", src, str(base)],
                            capture_output=True, timeout=60, check=False)
             png = base.with_suffix(".png")
             if not png.exists():
                 raise HTTPException(404, "Page not found")
             from PIL import Image
             with Image.open(png) as im:
-                im.convert("RGB").save(out, "WEBP", quality=80, method=4)
+                im.convert("RGB").save(out, "WEBP", quality=82, method=4)
     return FileResponse(out, media_type="image/webp", headers={"Cache-Control": "private, max-age=86400"})
 
 
@@ -376,23 +397,26 @@ def raw(file_id: int, k: Optional[str] = None, user=Depends(get_current_user)):
         return RedirectResponse(f["url"])
     key = q1("SELECT storage_key FROM files WHERE id=%s", (file_id,))["storage_key"]
     if f["file_type"] in OFFICE:
-        return _serve(_pdf_key(f, key), _display_name(f, "pdf"), "pdf", inline=True)
-    return _serve(key, _display_name(f, f["file_type"]), f["file_type"], inline=True)
+        return _serve(_pdf_key(f, key), _display_name(f, "pdf"), "pdf", inline=True, f=f, slot=f"preview-v{f['version']}")
+    return _serve(key, _display_name(f, f["file_type"]), f["file_type"], inline=True, f=f, slot=f"orig-v{f['version']}")
 
 
 @router.get("/thumb/{file_id}.webp")
-def thumb(file_id: int, k: Optional[str] = None, user=Depends(get_current_user)):
+def thumb(file_id: int, k: Optional[str] = None, s: int = 0, user=Depends(get_current_user)):
+    """Card image (s=0, long edge THUMB_EDGE) or the small variant (s=1) for lists, covers and srcset."""
     f = file_or_404(file_id, user, k)
     if not f["thumb_key"]:
         raise HTTPException(404, "No thumbnail")
+    key = small_thumb_key(f["thumb_key"]) if s and (f.get("thumb_rev") or 1) >= 2 else f["thumb_key"]
     st = store()
-    pub = st.public_url(f["thumb_key"]) if f["visibility"] == "public" else None
+    pub = st.public_url(key) if f["visibility"] == "public" else None
     if pub:
         return RedirectResponse(pub, status_code=302)
-    path = st.local_path(f["thumb_key"])
+    path = st.local_path(key)
     if not path:
         raise HTTPException(404, "No thumbnail")
-    cache = "public, max-age=86400" if f["visibility"] == "public" else "private, max-age=3600"
+    # URLs carry ?v=<version>-<rev>, so a regenerated image always gets a new URL
+    cache = "public, max-age=604800, immutable" if f["visibility"] == "public" else "private, max-age=86400"
     return FileResponse(path, media_type="image/webp", headers={"Cache-Control": cache})
 
 
@@ -505,6 +529,7 @@ def bulk_zip(ids: str, request: Request, user=Depends(get_current_user)):
             p = store().local_path(key) if key else None
             if not p:
                 continue
+            p = docmeta.stamped(f, Path(p), f["file_type"], f"orig-v{f['version']}")
             n = _display_name(f, f["file_type"])
             base, i = n, 1
             while n in names:

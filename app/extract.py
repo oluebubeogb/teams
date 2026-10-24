@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import logging
 import re
+import shutil
 import subprocess
 import tempfile
 from collections import Counter
@@ -145,31 +146,77 @@ def snippet(text: str, n: int = 260) -> str:
 
 
 # ---------- thumbnails ----------
-def _webp(img, width: int = 480) -> bytes:
+THUMB_REV = 2   # bump to regenerate every stored thumbnail in the background (see app/backfill.py)
+DECK_TYPES = {"pptx", "ppt", "odp", "key"}
+
+
+def _encode(img, edge: int, quality: int) -> bytes:
     from PIL import Image
     img = img.convert("RGB") if img.mode not in ("RGB", "L") else img
-    if img.width > width:
-        h = int(img.height * width / img.width)
-        img = img.resize((width, h), Image.LANCZOS)
-    # crop very tall pages to a pleasant card ratio (≈ 4:5 .. 3:4)
-    max_h = int(img.width * 1.3)
-    if img.height > max_h:
-        img = img.crop((0, 0, img.width, max_h))
+    if max(img.size) > edge:   # only ever downscale: no blurry upscaling
+        r = edge / max(img.size)
+        img = img.resize((max(1, round(img.width * r)), max(1, round(img.height * r))), Image.LANCZOS)
     buf = io.BytesIO()
-    img.save(buf, "WEBP", quality=72, method=4)
+    img.save(buf, "WEBP", quality=quality, method=5)
     return buf.getvalue()
 
 
-def pdf_first_page_png(pdf: Path, out_dir: Path) -> Optional[Path]:
-    base = out_dir / "thumb"
+def thumb_set(img) -> dict:
+    """Card image (long edge THUMB_EDGE, sharp on 2x screens) + a small one for lists/covers, both WebP.
+    The full first page/slide is kept (no crop) so the card can show it whole at its real aspect ratio."""
+    from app import config
+    large = _encode(img, config.THUMB_EDGE, config.THUMB_QUALITY)
+    small = _encode(img, config.THUMB_SMALL_EDGE, min(90, config.THUMB_QUALITY + 2))
+    from PIL import Image
+    with Image.open(io.BytesIO(large)) as im:
+        w, h = im.size
+    return {"large": large, "small": small, "w": w, "h": h}
+
+
+def pdf_first_page_image(pdf: Path, out_dir: Path):
+    """Page 1 rendered by poppler at the card size (long edge THUMB_EDGE): crisp text, real page proportions."""
+    from app import config
+    from PIL import Image
+    base = out_dir / "hd"
     try:
-        subprocess.run(["pdftoppm", "-f", "1", "-l", "1", "-png", "-scale-to", "720", "-singlefile", str(pdf), str(base)],
-                       capture_output=True, timeout=60, check=False)
+        subprocess.run(["pdftoppm", "-f", "1", "-l", "1", "-png", "-aa", "yes", "-aaVector", "yes",
+                        "-scale-to", str(config.THUMB_EDGE), "-singlefile", str(pdf), str(base)],
+                       capture_output=True, timeout=90, check=False)
     except Exception as e:
         log.warning("pdftoppm failed: %s", e)
         return None
     p = base.with_suffix(".png")
-    return p if p.exists() else None
+    if not p.exists():
+        return None
+    with Image.open(p) as im:
+        return im.copy()
+
+
+def make_thumbs(path: Path, file_type: str, preview_pdf: Optional[Path] = None) -> tuple[Optional[dict], Optional[Path]]:
+    """Return (thumb_set or None, office->pdf path if produced here). Pass preview_pdf to skip LibreOffice."""
+    from PIL import Image, ImageOps
+    if file_type in IMAGE_TYPES:
+        try:
+            with Image.open(path) as im:
+                im.seek(0)
+                return thumb_set(ImageOps.exif_transpose(im.copy())), None
+        except Exception:
+            return None, None
+    with tempfile.TemporaryDirectory(prefix="teams-thumb-") as tmp:
+        tmpd = Path(tmp)
+        keep = None
+        pdf = preview_pdf if preview_pdf else (path if file_type == "pdf" else None)
+        if not pdf and file_type in OFFICE_TYPES:
+            src = tmpd / f"src.{file_type}"
+            shutil.copyfile(path, src)
+            pdf = office_to_pdf(src, tmpd)
+            if pdf:
+                keep = Path(tempfile.mkstemp(suffix=".pdf", prefix="teams-preview-")[1])
+                shutil.copyfile(pdf, keep)
+        if not pdf:
+            return None, None
+        img = pdf_first_page_image(Path(pdf), tmpd)
+        return (thumb_set(img) if img is not None else None), keep
 
 
 def office_to_pdf(src: Path, out_dir: Path) -> Optional[Path]:
@@ -191,42 +238,6 @@ def office_to_pdf(src: Path, out_dir: Path) -> Optional[Path]:
         return None
     p = out_dir / (src.stem + ".pdf")
     return p if p.exists() and p.stat().st_size > 0 else None
-
-
-def make_thumbnail(path: Path, file_type: str) -> tuple[Optional[bytes], Optional[Path]]:
-    """Return (webp bytes, office->pdf path if produced). Caller must use pdf before tmp dir cleanup."""
-    from PIL import Image
-    if file_type in IMAGE_TYPES:
-        try:
-            with Image.open(path) as im:
-                im.seek(0)
-                return _webp(im.copy()), None
-        except Exception:
-            return None, None
-    with tempfile.TemporaryDirectory(prefix="teams-thumb-") as tmp:
-        tmpd = Path(tmp)
-        pdf_bytes = None
-        pdf = None
-        if file_type == "pdf":
-            pdf = path
-        elif file_type in OFFICE_TYPES:
-            src = tmpd / f"src.{file_type}"
-            src.write_bytes(path.read_bytes())
-            pdf = office_to_pdf(src, tmpd)
-            if pdf:
-                pdf_bytes = pdf.read_bytes()
-        if not pdf:
-            return None, None
-        png = pdf_first_page_png(pdf, tmpd)
-        if not png:
-            return None, None
-        with Image.open(png) as im:
-            data = _webp(im.copy())
-        if pdf_bytes:
-            keep = Path(tempfile.mkstemp(suffix=".pdf", prefix="teams-preview-")[1])
-            keep.write_bytes(pdf_bytes)
-            return data, keep
-        return data, None
 
 
 def resize_square(data: bytes, size: int = 256) -> bytes:

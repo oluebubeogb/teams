@@ -80,6 +80,77 @@ How the migration behaves:
 
 Teams shows the `avatar_url` returned by Accounts' `/auth/me`. If a user has no picture, Teams falls back to their initials and a colour. The matching Accounts change ships separately (`collab-accounts-avatar.zip`).
 
+## AI titles & descriptions
+
+With an OpenAI-compatible provider configured (`AI_PRIMARY_*`, optional `AI_SECONDARY_*` fallback), the upload page shows
+an **AI title & description** switch. It is on by default (`AI_META_DEFAULT`) and can be switched off for the rest of the
+browser session; it applies to single and bulk uploads.
+
+- When on, the same AI call that writes the summary and topics also writes a title and a description from the file's
+  contents. They are applied straight away (the file page and upload queue update live), no confirmation needed.
+- A title the uploader typed is kept, and a shared description typed on the upload page is kept; AI fills only what was
+  left as the default.
+- If AI fails or isn't configured, the file keeps its filename title. Anyone with edit rights can change the title and
+  description later; once a person edits them, AI never overwrites them again.
+- The first title/description are kept in `original_title` / `original_description` (see `--revert` below).
+- Calls are spaced by `AI_MIN_INTERVAL_MS` and send at most `AI_MAX_INPUT_CHARS` of text.
+
+### Thumbnails
+
+Card images are rendered from page 1 (pdftoppm, anti-aliased) or slide 1 (via the stored preview PDF) as one WebP of
+`THUMB_EDGE` px on the long edge (default 1400, never upscaled, never cropped) plus one small WebP (`THUMB_SMALL_EDGE`,
+default 480) used for mini thumbnails and `srcset`. Their pixel size is stored per file (`thumb_w`, `thumb_h`, migration
+`004_thumbs_hd.sql`), so feed cards reserve the right frame before the image loads: slide decks get a 16:9 frame, PDFs
+use page 1's real shape (A4/Letter portrait, landscape, 16:9…), other types keep the 4:3 crop. The full-screen mobile
+viewer requests `/page` renders at 700/1100/1600 px via `srcset`.
+
+Older thumbnails are re-rendered automatically after boot in a background thread (`THUMB_BACKFILL_ON_BOOT`, one file every
+`THUMB_BACKFILL_DELAY_SECONDS`, newest first; office files reuse their stored preview PDF so LibreOffice is not re-run).
+The previous image is deleted once the new pair is saved. By hand:
+
+```bash
+python scripts/regen_thumbnails.py --dry-run     # list files still on old thumbnails
+python scripts/regen_thumbnails.py --limit 50 --delay 1
+python scripts/regen_thumbnails.py --force       # re-render everything (e.g. after changing THUMB_EDGE)
+```
+
+### Older files
+
+On boot (after migrations, `AI_BACKFILL_START_DELAY_SECONDS` later) a background thread gives existing files AI titles and
+descriptions: `AI_BACKFILL_BATCH` files per batch, one every `AI_BACKFILL_DELAY_SECONDS`, optionally capped by
+`AI_BACKFILL_MAX_PER_BOOT`. It never blocks startup, resumes where it stopped after a redeploy, skips files whose uploader
+switched AI off or that a person edited, retries failures up to 3 times and pauses if the provider keeps failing.
+`AI_BACKFILL_ON_BOOT=false` turns it off. Files without extractable text (images, links) are skipped.
+
+The same job by hand (inside the app container: `docker compose exec app python scripts/ai_backfill_meta.py …`):
+
+```bash
+python scripts/ai_backfill_meta.py --dry-run               # list what would change, no AI calls
+python scripts/ai_backfill_meta.py --limit 50              # at most 50 files
+python scripts/ai_backfill_meta.py --only-default-titles   # keep titles people typed; only replace filename titles
+python scripts/ai_backfill_meta.py --force                 # redo files AI already handled (never edited/opted-out ones)
+python scripts/ai_backfill_meta.py --revert                # put the saved original titles/descriptions back
+```
+
+## Document properties
+
+Previews (`/raw/<id>`, the PDF the browser viewer shows) and downloads carry the document properties from Teams, not
+whatever tool produced the file (PptxGenJS, Impress, Word…):
+
+| Property | Value |
+|---|---|
+| Title | the title on Teams |
+| Author | the sharer's display name |
+| Subject | the first tag (or the top topic when there are no tags) |
+| Keywords | all tags, comma separated |
+| Creator / Producer | Collab Teams |
+
+PDFs get a small incremental update (the original bytes plus a new Info dictionary; the XMP packet is dropped so viewers
+don't fall back to the old title). DOCX/PPTX/XLSX get a fresh `docProps/core.xml`. Stored files are never modified:
+stamped copies are made on first request, cached under `CACHE_DIR/meta` (capped by `META_CACHE_MB`) and keyed by a hash
+of the metadata, so editing the title or tags takes effect on the next view or download, and files uploaded before this
+change are covered automatically. `META_STAMP=false` turns it off.
+
 ## Layout
 
 ```
@@ -91,11 +162,13 @@ app/
   core.py            permissions (VIS), cards, events, notifications, background processing
   extract.py         text extraction + previews
   storage.py         local / S3
-  ai.py              optional tagging
+  ai.py              optional tagging, summaries, titles & descriptions (one call per file)
+  backfill.py        AI titles/descriptions for older files (boot thread + scripts/ai_backfill_meta.py)
+  docmeta.py         document properties stamped into previews/downloads
   routers/           files (+bulk), discover (feed/search/top/topics), social (+reports), orgs (+collections, verify), users, analytics
   static/            css/app.css (design system), js/app.js (SPA-ish pages), sw.js, img/
   templates/         page.html shell, icons.html sprite, embed
-scripts/             seed.py, smoke_test.py, migrate_sqlite.py
+scripts/             seed.py, smoke_test.py, migrate_sqlite.py, ai_backfill_meta.py
 ```
 
 ## Collab Suite org sync (Crede ⇄ Teams)

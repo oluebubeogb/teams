@@ -239,7 +239,7 @@ N_TEXT = {
 def notifications(cursor: Optional[str] = None, user=Depends(require_user)):
     cur = dec_cursor(cursor)
     before = int(cur[0]) if cur else 2**62
-    rows = q("""SELECT n.*, a.username, a.full_name, a.avatar_url, a.avatar_color, f.title AS file_title, f.thumb_key,
+    rows = q("""SELECT n.*, a.username, a.full_name, a.avatar_url, a.avatar_color, f.title AS file_title, f.thumb_key, f.thumb_rev,
                        f.version AS file_version, o.slug AS org_slug, o.name AS org_name, o.avatar_key,
                        m.status AS member_status, of.status AS feature_status
                 FROM notifications n LEFT JOIN users a ON a.id=n.actor_id LEFT JOIN files f ON f.id=n.file_id
@@ -256,7 +256,7 @@ def notifications(cursor: Optional[str] = None, user=Depends(require_user)):
             "actor": {"username": r["username"], "name": r["full_name"] or r["username"], "avatar": avatar_src(r),
                       "color": r["avatar_color"] or "#5C5DE2", "initials": initials(r["full_name"] or r["username"] or "?")} if r["username"] else None,
             "file": {"id": r["file_id"], "title": r["file_title"],
-                     "thumb": f"/thumb/{r['file_id']}.webp?v={r['file_version']}" if r["thumb_key"] else None} if r["file_id"] else None,
+                     "thumb": f"/thumb/{r['file_id']}.webp?v={r['file_version']}-{r['thumb_rev']}&s=1" if r["thumb_key"] else None} if r["file_id"] else None,
             "org": {"slug": r["org_slug"], "name": r["org_name"], "avatar": org_avatar_url(r["org_slug"], r["avatar_key"])} if r["org_slug"] else None,
             "comment_id": r["comment_id"],
             "pending": (r["kind"] == "org_invite" and r["member_status"] == "invited") or
